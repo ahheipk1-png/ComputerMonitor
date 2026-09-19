@@ -10,6 +10,8 @@ import subprocess
 import webbrowser
 import threading
 import urllib.request
+import platform
+import json
 import os
 import sys
 import time

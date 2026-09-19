@@ -851,6 +851,9 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         elif clean_path == '/ComputerMonitorAgent.exe':
             fname = 'ComputerMonitorAgent.exe'
             ctype = 'application/octet-stream'
+        elif clean_path == '/ComputerMonitor.zip':
+            fname = 'ComputerMonitor.zip'
+            ctype = 'application/zip'
         else:
             self.send_response(404)
             self.end_headers()
