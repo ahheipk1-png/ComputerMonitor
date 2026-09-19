@@ -96,8 +96,8 @@ def get_local_ip():
 
 
 def ensure_agent_exe():
-    """Ensure ComputerMonitorAgent.exe is available in BASE_DIR."""
-    if os.path.exists(AGENT_EXE_PATH):
+    """Ensure ComputerMonitorAgent.exe is available in BASE_DIR or ProgramData."""
+    if os.path.exists(AGENT_EXE_PATH) and os.path.getsize(AGENT_EXE_PATH) > 1000000:
         return True
 
     # 1. Try extracting from PyInstaller bundle
@@ -107,17 +107,43 @@ def ensure_agent_exe():
             try:
                 import shutil
                 shutil.copy2(bundled, AGENT_EXE_PATH)
-                return True
+                if os.path.exists(AGENT_EXE_PATH):
+                    return True
             except Exception:
                 pass
 
-    # 2. Try downloading from website
+    # 2. Check if installed in ProgramData
+    prog_agent = os.path.join(PROGRAM_DATA_DIR, EXE_NAME)
+    if os.path.exists(prog_agent) and os.path.getsize(prog_agent) > 1000000:
+        try:
+            import shutil
+            shutil.copy2(prog_agent, AGENT_EXE_PATH)
+            return True
+        except Exception:
+            return True
+
+    # 3. Try downloading from website with browser User-Agent header (avoids Cloudflare 403)
     try:
         url = f"{DASHBOARD_URL}/{EXE_NAME}"
-        urllib.request.urlretrieve(url, AGENT_EXE_PATH)
-        return os.path.exists(AGENT_EXE_PATH)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=12) as resp, open(AGENT_EXE_PATH, 'wb') as out:
+            out.write(resp.read())
+        if os.path.exists(AGENT_EXE_PATH) and os.path.getsize(AGENT_EXE_PATH) > 1000000:
+            return True
     except Exception:
-        return False
+        pass
+
+    # 4. Fallback via PowerShell
+    try:
+        url = f"{DASHBOARD_URL}/{EXE_NAME}"
+        ps_cmd = f"Invoke-WebRequest -Uri '{url}' -OutFile '{AGENT_EXE_PATH}'"
+        run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
+        if os.path.exists(AGENT_EXE_PATH) and os.path.getsize(AGENT_EXE_PATH) > 1000000:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 def run_cmd_hidden(cmd_list):

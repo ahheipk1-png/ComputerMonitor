@@ -40,6 +40,21 @@ let fleetId = urlParams.get('fleet') || localStorage.getItem('cm_fleet_id') || '
 localStorage.setItem('cm_fleet_id', fleetId);
 
 let mqttFleetClient = null;
+let mqttFleetClients = [];
+
+function publishFleetCommand(topic, payload) {
+  const jsonStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  let sent = false;
+  mqttFleetClients.forEach(client => {
+    if (client && client.connected) {
+      try {
+        client.publish(topic, jsonStr);
+        sent = true;
+      } catch (e) {}
+    }
+  });
+  return sent;
+}
 
 // Computer Node Aliases Mapping
 let nodeAliases = {};
@@ -82,12 +97,13 @@ async function setNodeAlias(nodeId, newAlias) {
   saveNodes();
 
   // 1. Send remote command to agent over MQTT
-  if (mqttFleetClient && mqttFleetClient.connected && node.name) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
-    mqttFleetClient.publish(cmdTopic, JSON.stringify({
+  const targetHost = node.rawHostname || node.name;
+  if (targetHost) {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
+    publishFleetCommand(cmdTopic, {
       action: 'set_alias',
       alias: trimmed
-    }));
+    });
   }
 
   // 2. Direct HTTP fallback if endpoint is HTTP
@@ -251,25 +267,23 @@ function handleIncomingNodeTelemetry(data) {
   }
 }
 
-// Initialize MQTT Cloud Fleet Connection
+// Initialize MQTT Cloud Fleet Connections across all redundant brokers simultaneously
 function initMqttFleet() {
-  const brokers = [
+  const brokerEndpoints = [
     'wss://broker.emqx.io:8084/mqtt',
     'wss://broker.hivemq.com:8884/mqtt'
   ];
-  let brokerIdx = 0;
 
-  function tryConnect() {
-    if (typeof mqtt === 'undefined') {
-      console.warn('MQTT.js library not ready; retrying...');
-      setTimeout(tryConnect, 1000);
-      return;
-    }
-    const broker = brokers[brokerIdx % brokers.length];
-    console.log(`Connecting to Fleet Broker: ${broker} for Fleet [${fleetId}]`);
+  if (typeof mqtt === 'undefined') {
+    console.warn('MQTT.js library not ready; retrying...');
+    setTimeout(initMqttFleet, 1000);
+    return;
+  }
 
+  brokerEndpoints.forEach(brokerUrl => {
+    console.log(`Connecting to Fleet Broker: ${brokerUrl} for Fleet [${fleetId}]`);
     try {
-      mqttFleetClient = mqtt.connect(broker, {
+      const client = mqtt.connect(brokerUrl, {
         clientId: 'cm_web_' + Math.random().toString(16).substring(2, 10),
         clean: true,
         connectTimeout: 8000,
@@ -277,8 +291,8 @@ function initMqttFleet() {
         keepalive: 45
       });
 
-      mqttFleetClient.on('connect', () => {
-        console.log(`Connected to Fleet Cloud Broker! Fleet ID: ${fleetId}`);
+      client.on('connect', () => {
+        console.log(`Connected to Fleet Cloud Broker: ${brokerUrl}! Fleet ID: ${fleetId}`);
         const syncBadge = document.getElementById('fleet-sync-badge');
         const fleetDisplay = document.getElementById('fleet-id-display');
         if (fleetDisplay) fleetDisplay.textContent = fleetId;
@@ -288,13 +302,13 @@ function initMqttFleet() {
         }
 
         const subTopic = `computermonitor/fleet/${fleetId}/+`;
-        mqttFleetClient.subscribe(subTopic, (err) => {
-          if (err) console.error('Subscription error:', err);
-          else console.log(`Subscribed to ${subTopic}`);
+        client.subscribe(subTopic, (err) => {
+          if (err) console.error(`Subscription error on ${brokerUrl}:`, err);
+          else console.log(`Subscribed to ${subTopic} on ${brokerUrl}`);
         });
       });
 
-      mqttFleetClient.on('message', (topic, message) => {
+      client.on('message', (topic, message) => {
         if (topic.endsWith('/cmd')) return;
         try {
           const data = JSON.parse(message.toString());
@@ -304,20 +318,16 @@ function initMqttFleet() {
         }
       });
 
-      mqttFleetClient.on('error', (err) => {
-        console.warn('MQTT Error:', err);
-        const syncBadge = document.getElementById('fleet-sync-badge');
-        if (syncBadge) {
-          syncBadge.style.color = 'var(--amber)';
-          syncBadge.innerHTML = `Fleet: <strong>${fleetId}</strong> 🟡`;
-        }
+      client.on('error', (err) => {
+        console.warn(`MQTT Error on ${brokerUrl}:`, err);
       });
-    } catch (e) {
-      console.error('MQTT setup failed:', e);
-    }
-  }
 
-  tryConnect();
+      mqttFleetClients.push(client);
+      if (!mqttFleetClient) mqttFleetClient = client;
+    } catch (e) {
+      console.error(`MQTT setup failed for ${brokerUrl}:`, e);
+    }
+  });
 }
 
 // Render Connected Fleet Bar
@@ -654,14 +664,14 @@ async function requestStopProcess(identifier, isPid = true) {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  if (mqttFleetClient && mqttFleetClient.connected) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
-    mqttFleetClient.publish(cmdTopic, JSON.stringify({
-      action: 'kill',
-      identifier: identifier,
-      val: identifier,
-      isPid: isPid
-    }));
+  const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
+  const sent = publishFleetCommand(cmdTopic, {
+    action: 'kill',
+    identifier: identifier,
+    val: identifier,
+    isPid: isPid
+  });
+  if (sent) {
     showToast(`Stopping process [${identifier}] on [${dispName}]...`);
   }
 
@@ -720,12 +730,12 @@ async function executeRestartComputer() {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  if (mqttFleetClient && mqttFleetClient.connected) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
-    mqttFleetClient.publish(cmdTopic, JSON.stringify({
-      action: 'restart',
-      delay: 5
-    }));
+  const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
+  const sent = publishFleetCommand(cmdTopic, {
+    action: 'restart',
+    delay: 5
+  });
+  if (sent) {
     showToast(`🔄 Reboot signal dispatched to [${dispName}]...`);
     const alertBanner = document.getElementById('agent-alert-banner');
     const alertTitle = document.getElementById('alert-title');
