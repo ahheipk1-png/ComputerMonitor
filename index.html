@@ -116,6 +116,12 @@
             <span class="meta-label">PING</span>
             <span class="meta-val font-mono text-cyan" id="meta-ping">12 ms</span>
           </div>
+          <button class="btn-restart-pc" id="btn-restart-computer" title="Restart this computer remotely">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Restart Computer</span>
+          </button>
         </div>
       </div>
 
@@ -570,6 +576,30 @@
             <button type="submit" class="btn-primary" style="background: var(--rose); border-color: var(--rose);" id="btn-submit-kill">Stop Process</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restart Computer Modal -->
+  <div class="modal-overlay" id="restart-computer-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🔄 Restart Computer</h3>
+        <button class="modal-close" id="restart-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.5;">
+          Are you sure you want to reboot <strong id="restart-target-node" class="text-cyan">Selected Computer</strong>?
+        </p>
+        <div style="background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.84rem; color: var(--rose); line-height: 1.45;">
+          ⚠️ <strong>Warning:</strong> Any unsaved work or running applications on this machine will be closed. Telemetry streaming will temporarily disconnect while the computer reboots and will automatically resume once the machine starts up.
+        </div>
+        <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn-cancel" id="btn-cancel-restart">Cancel</button>
+          <button type="button" class="btn-primary" style="background: linear-gradient(135deg, #d97706, #e11d48); border-color: transparent;" id="btn-confirm-restart">
+            <span>🔄 Yes, Restart Computer</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

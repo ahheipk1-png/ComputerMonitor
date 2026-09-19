@@ -11,6 +11,7 @@ import socket
 import platform
 import os
 import sys
+import subprocess
 import webbrowser
 import threading
 import time
@@ -380,6 +381,74 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+        elif self.path in ('/restart', '/reboot'):
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8') if length > 0 else ''
+                data = json.loads(body) if body else {}
+                delay = int(data.get('delay', 5))
+                delay = max(1, min(delay, 60))
+
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'message': f"Restart initiated successfully. System will reboot in {delay} seconds..."
+                }).encode('utf-8'))
+                self.wfile.flush()
+
+                def execute_reboot():
+                    time.sleep(1.2)
+                    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+                    if platform.system() == 'Windows':
+                        subprocess.run(
+                            ['shutdown', '/r', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'],
+                            creationflags=creationflags,
+                            check=False
+                        )
+                    elif platform.system() == 'Darwin':
+                        subprocess.run(['sudo', 'shutdown', '-r', f"+{int(delay/60)}"], check=False)
+                    else:
+                        subprocess.run(['shutdown', '-r', f"+{int(delay/60)}"], check=False)
+
+                threading.Thread(target=execute_reboot, daemon=True).start()
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
+
+        elif self.path == '/cancel-restart':
+            try:
+                creationflags = 0x08000000 if sys.platform == 'win32' else 0
+                if platform.system() == 'Windows':
+                    res = subprocess.run(
+                        ['shutdown', '/a'],
+                        capture_output=True,
+                        text=True,
+                        creationflags=creationflags
+                    )
+                    if res.returncode == 0:
+                        msg = "System restart sequence successfully cancelled."
+                        success = True
+                    else:
+                        msg = res.stderr.strip() or "No system restart sequence was pending."
+                        success = False
+                else:
+                    subprocess.run(['shutdown', '-c'], check=False)
+                    msg = "Restart cancelled."
+                    success = True
+
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': success, 'message': msg}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
         else:
             self.send_response(404)
             self.end_headers()

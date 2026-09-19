@@ -533,6 +533,58 @@ body {
   font-weight: 600;
 }
 
+.btn-restart-pc {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.15), rgba(225, 29, 72, 0.12));
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  color: #fbbf24;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.btn-restart-pc:hover {
+  background: linear-gradient(135deg, #d97706, #e11d48);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 3px 12px rgba(217, 119, 6, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-restart-pc:active {
+  transform: translateY(0);
+}
+
+.btn-comp-restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  color: #fbbf24;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.btn-comp-restart:hover {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #d97706;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+
 /* ========================================================
    FLEET COMPARISON GRID VIEW
    ======================================================== */

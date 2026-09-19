@@ -122,6 +122,10 @@ class App(tk.Tk):
         self.btn_uninstall = tk.Button(btn_grid, text="🗑 Remove Startup Task", font=("Segoe UI", 9, "bold"), bg="#475569", fg="#ffffff", activebackground="#334155", activeforeground="#ffffff", relief="flat", padx=10, pady=8, cursor="hand2", command=self.uninstall_task)
         self.btn_uninstall.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=4)
 
+        # Row C: System Restart
+        self.btn_restart_pc = tk.Button(btn_grid, text="🔄 Restart Computer", font=("Segoe UI", 9, "bold"), bg="#d97706", fg="#ffffff", activebackground="#b45309", activeforeground="#ffffff", relief="flat", padx=10, pady=8, cursor="hand2", command=self.restart_computer)
+        self.btn_restart_pc.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+
         btn_grid.columnconfigure(0, weight=1)
         btn_grid.columnconfigure(1, weight=1)
 
@@ -304,6 +308,28 @@ class App(tk.Tk):
         res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
         self.log("Task removed.")
         self.update_ui_status()
+
+    def restart_computer(self):
+        confirm = messagebox.askyesno(
+            "Restart Computer Confirmation",
+            "Are you sure you want to RESTART this computer now?\n\n"
+            "Warning: All open applications will close and unsaved work will be lost.",
+            icon='warning'
+        )
+        if confirm:
+            self.log("Initiating system restart sequence (5s delay)...")
+            try:
+                creationflags = 0x08000000 if sys.platform == 'win32' else 0
+                subprocess.run(
+                    ['shutdown', '/r', '/t', '5', '/c', 'Restart initiated from ComputerMonitor Control Center'],
+                    creationflags=creationflags,
+                    check=False
+                )
+                self.log("Restart command sent. Computer will reboot in 5 seconds.")
+                messagebox.showinfo("Restarting", "System restart command sent.\nComputer will reboot in 5 seconds.")
+            except Exception as e:
+                self.log(f"Failed to restart: {e}")
+                messagebox.showerror("Error", f"Failed to issue restart: {e}")
 
     def terminate_custom_process(self):
         val = self.ent_kill.get().strip()

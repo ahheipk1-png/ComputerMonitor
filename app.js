@@ -164,13 +164,26 @@ function renderFleetComparisonGrid() {
         </div>
       </div>
 
-      <button class="btn-comp-drill" data-id="${node.id}">Drilldown Detailed Telemetry &rarr;</button>
+      <div style="display: flex; gap: 8px; margin-top: 14px;">
+        <button class="btn-comp-drill" data-id="${node.id}" style="flex: 1;">Drilldown Detailed Telemetry &rarr;</button>
+        <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${node.name}">
+          <span>🔄 Restart</span>
+        </button>
+      </div>
     `;
 
     card.querySelector('.btn-comp-drill').addEventListener('click', () => {
       selectNode(node.id);
       switchViewMode('detailed');
     });
+
+    const btnRestart = card.querySelector('.btn-comp-restart');
+    if (btnRestart) {
+      btnRestart.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRestartModal(node.id);
+      });
+    }
 
     grid.appendChild(card);
   });
@@ -364,6 +377,64 @@ async function requestStopProcess(identifier, isPid = true) {
     }
   } catch (err) {
     showToast(`Error communicating with agent: ${err.message}`, true);
+  }
+}
+
+let pendingRestartNodeId = null;
+
+function openRestartModal(nodeId) {
+  const node = (nodeId ? state.nodes.find(n => n.id === nodeId) : null) || getActiveNode();
+  if (node.status !== 'online') {
+    showToast(`Cannot restart: Computer [${node.name}] is currently offline.`, true);
+    return;
+  }
+  pendingRestartNodeId = node.id;
+  const modal = document.getElementById('restart-computer-modal');
+  const targetLabel = document.getElementById('restart-target-node');
+  if (targetLabel) {
+    targetLabel.textContent = `${node.name} (${node.ip || node.endpoint})`;
+  }
+  if (modal) modal.classList.add('active');
+}
+
+function closeRestartModal() {
+  const modal = document.getElementById('restart-computer-modal');
+  if (modal) modal.classList.remove('active');
+  pendingRestartNodeId = null;
+}
+
+async function executeRestartComputer() {
+  if (!pendingRestartNodeId) return;
+  const node = state.nodes.find(n => n.id === pendingRestartNodeId) || getActiveNode();
+  closeRestartModal();
+
+  const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+  const restartUrl = `${baseUrl}/restart`;
+
+  try {
+    const res = await fetch(restartUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ delay: 5 }),
+      signal: AbortSignal.timeout(6000)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
+      const alertBanner = document.getElementById('agent-alert-banner');
+      const alertTitle = document.getElementById('alert-title');
+      const alertDesc = document.getElementById('alert-desc');
+      if (alertBanner) alertBanner.style.display = 'flex';
+      if (alertTitle) alertTitle.textContent = 'SYSTEM REBOOT IN PROGRESS';
+      if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${node.name}. Machine will reboot and automatically reconnect once startup completes.`;
+    } else {
+      showToast(data.error || 'Failed to initiate system restart.', true);
+    }
+  } catch (err) {
+    showToast(`Error sending restart command: ${err.message}`, true);
   }
 }
 
@@ -933,6 +1004,34 @@ function setupEvents() {
       renderProcesses();
     });
   });
+
+  // Restart Computer Modal Listeners
+  const btnRestartComp = document.getElementById('btn-restart-computer');
+  const btnCloseRestartModal = document.getElementById('restart-modal-close');
+  const btnCancelRestart = document.getElementById('btn-cancel-restart');
+  const btnConfirmRestart = document.getElementById('btn-confirm-restart');
+  const restartModal = document.getElementById('restart-computer-modal');
+
+  if (btnRestartComp) {
+    btnRestartComp.addEventListener('click', () => {
+      openRestartModal(state.selectedNodeId);
+    });
+  }
+
+  if (btnCloseRestartModal) {
+    btnCloseRestartModal.addEventListener('click', closeRestartModal);
+  }
+  if (btnCancelRestart) {
+    btnCancelRestart.addEventListener('click', closeRestartModal);
+  }
+  if (restartModal) {
+    restartModal.addEventListener('click', (e) => {
+      if (e.target === restartModal) closeRestartModal();
+    });
+  }
+  if (btnConfirmRestart) {
+    btnConfirmRestart.addEventListener('click', executeRestartComputer);
+  }
 
   window.addEventListener('resize', () => {
     updateDetailedView();
