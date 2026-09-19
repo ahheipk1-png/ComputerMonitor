@@ -41,7 +41,11 @@
         </div>
 
         <a href="ComputerMonitorControl.exe" download="ComputerMonitorControl.exe" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: var(--cyan); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download standalone Control Center for another computer (Self-contained, No Python needed)">
-          <span>⬇️ Add Another PC (.exe)</span>
+          <span>⬇️ Add PC (.exe)</span>
+        </a>
+
+        <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: var(--emerald); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download complete standalone package with all tools in 7-Zip format (13.9 MB, No Python needed)">
+          <span>⬇️ Full Suite (.7z)</span>
         </a>
 
         <div class="connection-status" id="connection-status">
@@ -72,6 +76,14 @@
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             <span>Download Desktop GUI</span>
+          </a>
+          <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="btn-download-agent" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.35); color: var(--emerald);" title="Download full standalone package with all tools in 7-Zip format (13.9 MB)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download .7z Suite (14 MB)</span>
           </a>
           <button class="btn-add-node" id="btn-add-node">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -614,7 +626,8 @@
           <h4 style="font-size: 0.9rem; color: var(--cyan); margin-bottom: 6px;">Windows Computers (No Python Needed):</h4>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">Download and open the Desktop GUI. It starts the background telemetry agent automatically and shows your computer's URL to connect here:</p>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <a href="ComputerMonitorControl.exe" download class="btn-dl-action btn-dl-primary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Download Desktop GUI (ComputerMonitorControl.exe)</a>
+            <a href="ComputerMonitorControl.exe" download class="btn-dl-action btn-dl-primary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Download Desktop GUI (.exe)</a>
+            <a href="ComputerMonitor.7z" download class="btn-dl-action btn-dl-secondary" style="padding: 8px 16px; font-size: 0.85rem; border-color: rgba(16, 185, 129, 0.4); color: var(--emerald);">📦 Download Full Suite (.7z - 14 MB)</a>
           </div>
         </div>
 
