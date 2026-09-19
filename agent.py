@@ -220,8 +220,9 @@ def main():
     collector = threading.Thread(target=background_metrics_collector, daemon=True)
     collector.start()
 
-    # Automatically open the web dashboard in browser
-    threading.Thread(target=auto_open_browser, daemon=True).start()
+    # Automatically open the web dashboard in browser (unless --background or --no-browser flag is passed)
+    if '--background' not in sys.argv and '--no-browser' not in sys.argv:
+        threading.Thread(target=auto_open_browser, daemon=True).start()
 
     server = QuietThreadingHTTPServer(("", PORT), MetricsHandler)
     try:
