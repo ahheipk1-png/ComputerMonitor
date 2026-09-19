@@ -40,8 +40,8 @@ const state = {
   selectedNodeId: 'node-local',
   viewMode: 'detailed',
   searchQuery: '',
-  sortCol: 'cpu',
-  sortDir: 'desc',
+  sortCol: 'name',
+  sortDir: 'asc',
   expandedGroups: new Set(),
 };
 
