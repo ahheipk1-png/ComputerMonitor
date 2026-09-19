@@ -1,148 +1,45 @@
 /**
- * ComputerMonitor Fleet Telemetry Engine
- * Multi-Machine Cluster & Real-Time Observer
+ * ComputerMonitor Telemetry Engine
+ * 100% Real Hardware Data - Zero Simulated / Dummy Data
  */
 
-// Default fleet configurations
+// Default clean node setup (Only real machines)
 const DEFAULT_NODES = [
   {
-    id: 'node-win-01',
-    name: 'Primary Workstation',
-    os: 'Windows 11 Pro',
-    osIcon: '🪟',
-    cpuModel: 'Intel Core i9-13900K (16C/24T)',
-    ramTotal: 32.0,
+    id: 'node-local',
+    name: 'This Computer (Local)',
+    os: 'Detecting...',
+    osIcon: '💻',
+    cpuModel: 'Hardware Telemetry',
+    ramTotal: 0,
     endpoint: 'http://localhost:5500/metrics',
-    status: 'online',
-    ip: '192.168.1.100',
-    uptime: 15502,
-    cpu: 28,
-    ram: 48,
-    disk: 58,
-    temp: 46,
-    ping: 12,
-    netDl: 84.2,
-    netUl: 16.8,
+    status: 'offline',
+    ip: 'localhost',
+    uptime: 0,
+    cpu: 0,
+    ram: 0,
+    disk: 0,
+    temp: '--',
+    ping: 0,
+    netDl: 0,
+    netUl: 0,
+    cores: [],
     history: {
-      cpu: new Array(30).fill(28),
-      ram: new Array(30).fill(48),
-      disk: new Array(30).fill(12),
-      net: new Array(30).fill(40),
+      cpu: new Array(30).fill(0),
+      ram: new Array(30).fill(0),
+      disk: new Array(30).fill(0),
+      net: new Array(30).fill(0),
     },
-    processes: [
-      { pid: 4812, name: 'chrome.exe', cpu: 6.4, mem: 1420, io: '1.2 MB/s', status: 'running' },
-      { pid: 1092, name: 'Code.exe (VSCode)', cpu: 4.8, mem: 980, io: '0.4 MB/s', status: 'running' },
-      { pid: 8224, name: 'python.exe', cpu: 3.2, mem: 612, io: '8.4 MB/s', status: 'running' },
-      { pid: 2190, name: 'Discord.exe', cpu: 1.5, mem: 430, io: '0.1 MB/s', status: 'running' },
-      { pid: 904,  name: 'System Idle Process', cpu: 72.0, mem: 8, io: '0.0 MB/s', status: 'running' },
-      { pid: 3340, name: 'Spotify.exe', cpu: 0.9, mem: 310, io: '0.2 MB/s', status: 'running' },
-      { pid: 5612, name: 'explorer.exe', cpu: 0.7, mem: 240, io: '0.1 MB/s', status: 'sleeping' },
-      { pid: 7780, name: 'docker-desktop.exe', cpu: 2.1, mem: 1840, io: '4.1 MB/s', status: 'running' },
-    ]
-  },
-  {
-    id: 'node-linux-02',
-    name: 'Linux Compute Server',
-    os: 'Ubuntu 22.04 LTS',
-    osIcon: '🐧',
-    cpuModel: 'AMD EPYC 7763 32-Core',
-    ramTotal: 64.0,
-    endpoint: 'http://192.168.1.150:5500/metrics',
-    status: 'online',
-    ip: '192.168.1.150',
-    uptime: 849204,
-    cpu: 64,
-    ram: 72,
-    disk: 44,
-    temp: 58,
-    ping: 18,
-    netDl: 340.5,
-    netUl: 180.2,
-    history: {
-      cpu: new Array(30).fill(64),
-      ram: new Array(30).fill(72),
-      disk: new Array(30).fill(45),
-      net: new Array(30).fill(80),
-    },
-    processes: [
-      { pid: 1402, name: 'dockerd', cpu: 24.1, mem: 4800, io: '42.0 MB/s', status: 'running' },
-      { pid: 2198, name: 'postgres', cpu: 14.8, mem: 3200, io: '18.5 MB/s', status: 'running' },
-      { pid: 3892, name: 'nginx worker', cpu: 3.4, mem: 380, io: '5.2 MB/s', status: 'running' },
-      { pid: 4001, name: 'redis-server', cpu: 2.1, mem: 840, io: '1.8 MB/s', status: 'running' },
-      { pid: 1,    name: 'systemd', cpu: 0.1, mem: 48, io: '0.0 MB/s', status: 'sleeping' },
-    ]
-  },
-  {
-    id: 'node-mac-03',
-    name: 'MacBook Pro M3',
-    os: 'macOS Sonoma',
-    osIcon: '🍎',
-    cpuModel: 'Apple M3 Max (14-core)',
-    ramTotal: 36.0,
-    endpoint: 'http://192.168.1.210:5500/metrics',
-    status: 'online',
-    ip: '192.168.1.210',
-    uptime: 48200,
-    cpu: 18,
-    ram: 39,
-    disk: 32,
-    temp: 39,
-    ping: 9,
-    netDl: 52.4,
-    netUl: 8.2,
-    history: {
-      cpu: new Array(30).fill(18),
-      ram: new Array(30).fill(39),
-      disk: new Array(30).fill(8),
-      net: new Array(30).fill(25),
-    },
-    processes: [
-      { pid: 812,  name: 'WindowServer', cpu: 4.2, mem: 850, io: '0.8 MB/s', status: 'running' },
-      { pid: 1540, name: 'Xcode', cpu: 8.1, mem: 3400, io: '12.0 MB/s', status: 'running' },
-      { pid: 3110, name: 'Safari', cpu: 2.4, mem: 1100, io: '0.3 MB/s', status: 'running' },
-      { pid: 908,  name: 'Terminal', cpu: 0.2, mem: 120, io: '0.0 MB/s', status: 'sleeping' },
-    ]
-  },
-  {
-    id: 'node-office-04',
-    name: 'Office AI / Gaming Rig',
-    os: 'Windows 11 Home',
-    osIcon: '⚡',
-    cpuModel: 'AMD Ryzen 7 7800X3D',
-    ramTotal: 32.0,
-    endpoint: 'http://192.168.1.120:5500/metrics',
-    status: 'online',
-    ip: '192.168.1.120',
-    uptime: 9400,
-    cpu: 42,
-    ram: 54,
-    disk: 78,
-    temp: 52,
-    ping: 15,
-    netDl: 112.0,
-    netUl: 34.5,
-    history: {
-      cpu: new Array(30).fill(42),
-      ram: new Array(30).fill(54),
-      disk: new Array(30).fill(25),
-      net: new Array(30).fill(50),
-    },
-    processes: [
-      { pid: 6104, name: 'Ollama-daemon.exe', cpu: 28.5, mem: 8200, io: '14.0 MB/s', status: 'running' },
-      { pid: 4120, name: 'Steam.exe', cpu: 1.2, mem: 490, io: '0.1 MB/s', status: 'running' },
-      { pid: 8810, name: 'discord.exe', cpu: 1.8, mem: 380, io: '0.1 MB/s', status: 'running' },
-    ]
+    processes: []
   }
 ];
 
 // App State
 const state = {
-  nodes: JSON.parse(localStorage.getItem('cm_fleet_nodes')) || DEFAULT_NODES,
-  selectedNodeId: 'node-win-01',
-  viewMode: 'detailed', // 'detailed' | 'fleet'
-  mode: 'sim',          // 'sim' | 'agent'
+  nodes: JSON.parse(localStorage.getItem('cm_real_nodes_v1')) || DEFAULT_NODES,
+  selectedNodeId: 'node-local',
+  viewMode: 'detailed',
   searchQuery: '',
-  coreCount: 16,
 };
 
 // Canvas references
@@ -153,17 +50,15 @@ const canvases = {
   net: document.getElementById('net-chart'),
 };
 
-// Get active node object
 function getActiveNode() {
   return state.nodes.find(n => n.id === state.selectedNodeId) || state.nodes[0];
 }
 
-// Save nodes to localStorage
 function saveNodes() {
-  localStorage.setItem('cm_fleet_nodes', JSON.stringify(state.nodes));
+  localStorage.setItem('cm_real_nodes_v1', JSON.stringify(state.nodes));
 }
 
-// Render Fleet Bar
+// Render Connected Fleet Bar
 function renderFleetBar() {
   const container = document.getElementById('fleet-nodes-container');
   const countEl = document.getElementById('fleet-count');
@@ -178,7 +73,7 @@ function renderFleetBar() {
     card.innerHTML = `
       <div class="node-card-top">
         <div class="node-card-brand">
-          <span class="node-os-icon">${node.osIcon || '🖥️'}</span>
+          <span class="node-os-icon">${node.osIcon || '💻'}</span>
           <span class="node-card-name" title="${node.name}">${node.name}</span>
         </div>
         <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
@@ -186,15 +81,15 @@ function renderFleetBar() {
       <div class="node-card-stats">
         <div class="node-mini-stat">
           <span class="node-mini-lbl">CPU</span>
-          <span class="node-mini-val ${node.cpu > 75 ? 'text-rose' : 'text-cyan'}">${node.cpu}%</span>
+          <span class="node-mini-val ${node.status === 'online' ? 'text-cyan' : ''}">${node.status === 'online' ? node.cpu + '%' : '--'}</span>
         </div>
         <div class="node-mini-stat">
           <span class="node-mini-lbl">RAM</span>
-          <span class="node-mini-val text-purple">${node.ram}%</span>
+          <span class="node-mini-val text-purple">${node.status === 'online' ? node.ram + '%' : '--'}</span>
         </div>
         <div class="node-mini-stat">
-          <span class="node-mini-lbl">TEMP</span>
-          <span class="node-mini-val text-emerald">${node.temp}°C</span>
+          <span class="node-mini-lbl">STATUS</span>
+          <span class="node-mini-val ${node.status === 'online' ? 'text-emerald' : 'text-rose'}">${node.status === 'online' ? 'LIVE' : 'OFFLINE'}</span>
         </div>
       </div>
     `;
@@ -219,7 +114,7 @@ function renderFleetComparisonGrid() {
     card.innerHTML = `
       <div class="comp-header">
         <div class="comp-title-block">
-          <h3>${node.osIcon || '🖥️'} ${node.name}</h3>
+          <h3>${node.osIcon || '💻'} ${node.name}</h3>
           <p>${node.os} &bull; ${node.ip}</p>
         </div>
         <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
@@ -228,45 +123,41 @@ function renderFleetComparisonGrid() {
       <div class="comp-metrics-list">
         <div class="comp-metric-row">
           <div class="comp-metric-info">
-            <span>CPU Usage (${node.cpuModel})</span>
-            <span class="font-mono text-cyan">${node.cpu}%</span>
+            <span>CPU Usage</span>
+            <span class="font-mono text-cyan">${node.status === 'online' ? node.cpu + '%' : '--'}</span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill fill-cyan" style="width: ${node.cpu}%;"></div>
+            <div class="progress-fill fill-cyan" style="width: ${node.status === 'online' ? node.cpu : 0}%;"></div>
           </div>
         </div>
 
         <div class="comp-metric-row">
           <div class="comp-metric-info">
-            <span>Memory (${((node.ram / 100) * node.ramTotal).toFixed(1)} / ${node.ramTotal} GB)</span>
-            <span class="font-mono text-purple">${node.ram}%</span>
+            <span>Memory (${node.status === 'online' ? ((node.ram / 100) * node.ramTotal).toFixed(1) + ' / ' + node.ramTotal + ' GB' : '--'})</span>
+            <span class="font-mono text-purple">${node.status === 'online' ? node.ram + '%' : '--'}</span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill fill-purple" style="width: ${node.ram}%;"></div>
+            <div class="progress-fill fill-purple" style="width: ${node.status === 'online' ? node.ram : 0}%;"></div>
           </div>
         </div>
 
         <div class="comp-metric-row">
           <div class="comp-metric-info">
-            <span>Disk Space Used</span>
-            <span class="font-mono text-amber">${node.disk}%</span>
+            <span>Disk Usage</span>
+            <span class="font-mono text-amber">${node.status === 'online' ? node.disk + '%' : '--'}</span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill fill-amber" style="width: ${node.disk}%;"></div>
+            <div class="progress-fill fill-amber" style="width: ${node.status === 'online' ? node.disk : 0}%;"></div>
           </div>
         </div>
 
         <div class="stat-row">
-          <span class="stat-label">Core Thermals:</span>
-          <span class="stat-value font-mono text-emerald">${node.temp} °C</span>
+          <span class="stat-label">System Uptime:</span>
+          <span class="stat-value font-mono">${node.status === 'online' ? formatUptime(node.uptime) : '--'}</span>
         </div>
         <div class="stat-row">
-          <span class="stat-label">Network:</span>
-          <span class="stat-value font-mono">↓ ${node.netDl} Mbps &bull; ↑ ${node.netUl} Mbps</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Ping Latency:</span>
-          <span class="stat-value font-mono text-cyan">${node.ping} ms</span>
+          <span class="stat-label">Active Processes:</span>
+          <span class="stat-value font-mono text-cyan">${node.status === 'online' ? node.processes.length : '--'}</span>
         </div>
       </div>
 
@@ -282,27 +173,27 @@ function renderFleetComparisonGrid() {
   });
 }
 
-// Select a specific computer node
 function selectNode(nodeId) {
   state.selectedNodeId = nodeId;
   renderFleetBar();
   updateActiveNodeBanner();
-  renderProcesses();
+  updateDetailedView();
 }
 
-// Update Active Node Banner
 function updateActiveNodeBanner() {
   const node = getActiveNode();
-  document.getElementById('active-node-name').textContent = `${node.name}`;
-  document.getElementById('active-node-desc').textContent = `${node.os} • ${node.cpuModel} • IP: ${node.ip}`;
-  document.getElementById('meta-status').textContent = node.status.toUpperCase();
-  document.getElementById('meta-uptime').textContent = formatUptime(node.uptime);
-  document.getElementById('meta-ping').textContent = `${node.ping} ms`;
+  document.getElementById('active-node-name').textContent = node.name;
+  document.getElementById('active-node-desc').textContent = `${node.os} • ${node.cpuModel} • Endpoint: ${node.endpoint}`;
+  
+  const isOnline = node.status === 'online';
+  document.getElementById('meta-status').textContent = isOnline ? 'ONLINE (LIVE)' : 'OFFLINE';
+  document.getElementById('meta-status').className = `meta-val ${isOnline ? 'text-emerald' : 'text-rose'}`;
+  document.getElementById('meta-uptime').textContent = isOnline ? formatUptime(node.uptime) : '--:--:--';
+  document.getElementById('meta-ping').textContent = isOnline ? `${node.ping} ms` : '--';
   document.getElementById('cpu-name').textContent = node.cpuModel;
   document.getElementById('proc-node-tag').textContent = node.name;
 }
 
-// Switch between Detailed and Fleet Grid view
 function switchViewMode(mode) {
   state.viewMode = mode;
   const btnDetailed = document.getElementById('btn-view-detailed');
@@ -324,25 +215,8 @@ function switchViewMode(mode) {
   }
 }
 
-// Initialize Cores Grid
-function initCores() {
-  const grid = document.getElementById('cores-grid');
-  grid.innerHTML = '';
-  for (let i = 0; i < state.coreCount; i++) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'core-bar-wrapper';
-    wrapper.innerHTML = `
-      <div class="core-track">
-        <div class="core-fill" id="core-fill-${i}" style="height: 20%;"></div>
-      </div>
-      <span class="core-lbl">C${i + 1}</span>
-    `;
-    grid.appendChild(wrapper);
-  }
-}
-
-// Uptime Ticker
 function formatUptime(secs) {
+  if (!secs) return '00:00:00';
   const hrs = Math.floor(secs / 3600).toString().padStart(2, '0');
   const mins = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
   const s = (secs % 60).toString().padStart(2, '0');
@@ -372,10 +246,7 @@ function drawSparkline(canvas, data, colorHex, glowHex) {
 
   ctx.strokeStyle = colorHex;
   ctx.lineWidth = 2;
-  ctx.shadowColor = glowHex;
-  ctx.shadowBlur = 8;
   ctx.stroke();
-  ctx.shadowBlur = 0;
 
   ctx.lineTo(width, height);
   ctx.lineTo(0, height);
@@ -387,7 +258,6 @@ function drawSparkline(canvas, data, colorHex, glowHex) {
   ctx.fill();
 }
 
-// Render Radial Gauges
 function setRadialGauge(elementId, percent) {
   const circle = document.getElementById(elementId);
   if (!circle) return;
@@ -397,7 +267,7 @@ function setRadialGauge(elementId, percent) {
   circle.style.strokeDashoffset = offset;
 }
 
-// Dynamic Process Rendering & Filtering
+// Render Real Processes
 function renderProcesses() {
   const node = getActiveNode();
   const tbody = document.getElementById('proc-table-body');
@@ -412,6 +282,17 @@ function renderProcesses() {
   countSpan.textContent = `Showing ${filtered.length} processes`;
   tbody.innerHTML = '';
 
+  if (!procs.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-dim);">
+          ${node.status === 'online' ? 'No processes to display.' : '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.'}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
   filtered.forEach(p => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -423,107 +304,72 @@ function renderProcesses() {
       <td class="font-mono ${p.cpu > 15 ? 'text-amber' : ''}">${p.cpu.toFixed(1)}%</td>
       <td class="font-mono">${p.mem > 1024 ? (p.mem / 1024).toFixed(2) + ' GB' : p.mem + ' MB'}</td>
       <td class="font-mono">${p.io}</td>
-      <td><span class="status-badge ${p.status}">${p.status}</span></td>
+      <td><span class="status-badge ${p.status === 'running' ? 'running' : 'sleeping'}">${p.status}</span></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-function randRange(min, max) {
-  return min + Math.random() * (max - min);
-}
+// Update Detailed View with Real Telemetry
+function updateDetailedView() {
+  const active = getActiveNode();
+  const isOnline = active.status === 'online';
 
-// Simulation Tick for all Fleet computers
-function simulateFleet() {
-  state.nodes.forEach(node => {
-    node.uptime++;
+  // CPU
+  document.getElementById('cpu-percentage').textContent = isOnline ? `${active.cpu}%` : '0%';
+  document.getElementById('cpu-avg').textContent = isOnline ? `Avg: ${active.cpu}%` : 'Offline';
+  setRadialGauge('cpu-circle', isOnline ? active.cpu : 0);
+  document.getElementById('cpu-freq').textContent = active.cpuFreq || '-- GHz';
+  document.getElementById('cpu-temp').textContent = isOnline ? (active.temp !== '--' ? `${active.temp} °C` : 'Normal') : '--';
+  document.getElementById('total-processes').textContent = isOnline ? (active.processes ? active.processes.length : 0) : '--';
+  document.getElementById('total-threads').textContent = isOnline ? `${active.cpuCount || 16} Cores` : '--';
 
-    // Simulated variation based on node profile
-    const jitter = randRange(-4, 4);
-    node.cpu = Math.min(Math.max(Math.round(node.cpu + jitter), 8), 98);
-    node.ram = Math.min(Math.max(Math.round(node.ram + randRange(-1, 1)), 20), 92);
-    node.temp = Math.round(36 + (node.cpu / 100) * 34);
-    node.ping = Math.max(5, Math.round(node.ping + randRange(-1, 1)));
-    node.netDl = +(node.netDl + randRange(-3, 4)).toFixed(1);
-    node.netUl = +(node.netUl + randRange(-1, 2)).toFixed(1);
-
-    if (!node.history) {
-      node.history = {
-        cpu: new Array(30).fill(node.cpu),
-        ram: new Array(30).fill(node.ram),
-        disk: new Array(30).fill(15),
-        net: new Array(30).fill(40),
-      };
-    }
-
-    node.history.cpu.shift();
-    node.history.cpu.push(node.cpu);
-    node.history.ram.shift();
-    node.history.ram.push(node.ram);
-    node.history.disk.shift();
-    node.history.disk.push(Math.min(node.disk, 100));
-    node.history.net.shift();
-    node.history.net.push(Math.min(node.netDl / 4, 100));
-
-    // Process jitter
-    if (node.processes) {
-      node.processes.forEach(p => {
-        if (p.name !== 'System Idle Process') {
-          p.cpu = Math.max(0.1, +(p.cpu + randRange(-0.3, 0.3)).toFixed(1));
-        }
-      });
-    }
+  // Real Cores Rendering
+  const coresGrid = document.getElementById('cores-grid');
+  coresGrid.innerHTML = '';
+  const coresList = active.cores && active.cores.length ? active.cores : new Array(active.cpuCount || 8).fill(0);
+  coresList.forEach((cVal, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'core-bar-wrapper';
+    wrapper.innerHTML = `
+      <div class="core-track">
+        <div class="core-fill" style="height: ${isOnline ? cVal : 0}%;"></div>
+      </div>
+      <span class="core-lbl">C${i + 1}</span>
+    `;
+    coresGrid.appendChild(wrapper);
   });
 
-  renderFleetBar();
-
-  if (state.viewMode === 'fleet') {
-    renderFleetComparisonGrid();
-    return;
-  }
-
-  // Update currently selected node details
-  const active = getActiveNode();
-  document.getElementById('cpu-percentage').textContent = `${active.cpu}%`;
-  document.getElementById('cpu-avg').textContent = `Avg: ${active.cpu}%`;
-  setRadialGauge('cpu-circle', active.cpu);
-
-  const ghz = (3.2 + (active.cpu / 100) * 1.8).toFixed(2);
-  document.getElementById('cpu-freq').textContent = `${ghz} GHz`;
-  document.getElementById('cpu-temp').textContent = `${active.temp} °C`;
-  document.getElementById('meta-uptime').textContent = formatUptime(active.uptime);
-  document.getElementById('meta-ping').textContent = `${active.ping} ms`;
-
-  // Cores
-  for (let i = 0; i < state.coreCount; i++) {
-    const coreVal = Math.min(Math.max(Math.round(active.cpu + randRange(-16, 18)), 2), 100);
-    const el = document.getElementById(`core-fill-${i}`);
-    if (el) el.style.height = `${coreVal}%`;
-  }
-
   // RAM
-  const ramTotal = active.ramTotal || 32.0;
-  const ramUsed = ((active.ram / 100) * ramTotal).toFixed(1);
-  const ramFree = (ramTotal - ramUsed).toFixed(1);
+  if (isOnline && active.ramData) {
+    document.getElementById('ram-percentage').textContent = `${active.ram}%`;
+    setRadialGauge('ram-circle', active.ram);
+    document.getElementById('ram-used').textContent = `${active.ramData.used_gb} GB`;
+    document.getElementById('ram-free').textContent = `${active.ramData.free_gb} GB`;
+    document.getElementById('ram-summary-txt').textContent = `${active.ramData.used_gb} GB / ${active.ramData.total_gb} GB`;
+    document.getElementById('ram-seg-used').style.width = `${active.ram}%`;
+  } else {
+    document.getElementById('ram-percentage').textContent = '0%';
+    setRadialGauge('ram-circle', 0);
+    document.getElementById('ram-used').textContent = '-- GB';
+    document.getElementById('ram-free').textContent = '-- GB';
+    document.getElementById('ram-summary-txt').textContent = '-- / -- GB';
+    document.getElementById('ram-seg-used').style.width = '0%';
+  }
 
-  document.getElementById('ram-percentage').textContent = `${active.ram}%`;
-  setRadialGauge('ram-circle', active.ram);
-  document.getElementById('ram-used').textContent = `${ramUsed} GB`;
-  document.getElementById('ram-free').textContent = `${ramFree} GB`;
-  document.getElementById('ram-summary-txt').textContent = `${ramUsed} GB / ${ramTotal} GB`;
-  document.getElementById('ram-seg-used').style.width = `${active.ram}%`;
-
-  // Disk & Network
-  const readRate = (randRange(20, 240)).toFixed(1);
-  const writeRate = (randRange(5, 75)).toFixed(1);
-  document.getElementById('disk-read-rate').textContent = `${readRate} MB/s`;
-  document.getElementById('disk-write-rate').textContent = `${writeRate} MB/s`;
-  document.getElementById('net-dl-speed').textContent = active.netDl;
-  document.getElementById('net-ul-speed').textContent = active.netUl;
+  // Disk
+  if (isOnline && active.diskData) {
+    document.getElementById('drive-c-cap').textContent = `${active.diskData.free_gb} GB free of ${active.diskData.total_gb} GB`;
+    document.getElementById('drive-c-bar').style.width = `${active.diskData.percent}%`;
+    document.getElementById('disk-active-time').textContent = `Used: ${active.diskData.percent}%`;
+  } else {
+    document.getElementById('drive-c-cap').textContent = 'Drive info offline';
+    document.getElementById('drive-c-bar').style.width = '0%';
+  }
 
   renderProcesses();
 
-  // Draw Charts for active node (theme-aware colors)
+  // Charts
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const cyan = isDark ? '#38bdf8' : '#0284c7';
   const cyanGlow = isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.18)';
@@ -540,43 +386,87 @@ function simulateFleet() {
   drawSparkline(canvases.net, active.history.net, emerald, emeraldGlow);
 }
 
-// Live Local Agent Fetcher
-async function fetchLocalAgentMetrics() {
-  const active = getActiveNode();
-  try {
-    const res = await fetch(active.endpoint || 'http://localhost:5500/metrics', {
-      method: 'GET',
-      signal: AbortSignal.timeout(1200)
-    });
-    if (!res.ok) throw new Error('Agent HTTP error');
-    const data = await res.json();
+// Poll Real Hardware Agent across all nodes
+async function pollRealFleet() {
+  for (const node of state.nodes) {
+    const startTime = performance.now();
+    try {
+      const res = await fetch(node.endpoint, {
+        method: 'GET',
+        signal: AbortSignal.timeout(1500)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const pingMs = Math.round(performance.now() - startTime);
 
-    active.status = 'online';
-    document.getElementById('connection-status').className = 'connection-status online';
-    document.getElementById('status-text').textContent = `${active.name} (Live)`;
+      node.status = 'online';
+      node.ping = pingMs;
 
-    if (data.hostname) active.name = data.hostname;
-    if (data.cpu !== undefined) active.cpu = Math.round(data.cpu);
-    if (data.ram) {
-      active.ram = Math.round(data.ram.percent);
-      active.ramTotal = data.ram.total_gb;
+      if (data.hostname) node.name = data.hostname;
+      if (data.os) {
+        node.os = data.os;
+        if (data.os.includes('Windows')) node.osIcon = '🪟';
+        else if (data.os.includes('Mac') || data.os.includes('Darwin')) node.osIcon = '🍎';
+        else if (data.os.includes('Linux')) node.osIcon = '🐧';
+      }
+
+      if (data.cpu !== undefined) {
+        node.cpu = Math.round(data.cpu);
+        node.history.cpu.shift();
+        node.history.cpu.push(node.cpu);
+      }
+
+      if (data.cores) node.cores = data.cores;
+      if (data.cpu_count) node.cpuCount = data.cpu_count;
+      if (data.cpu_freq) node.cpuFreq = data.cpu_freq;
+      if (data.uptime !== undefined) node.uptime = data.uptime;
+
+      if (data.ram) {
+        node.ram = Math.round(data.ram.percent);
+        node.ramTotal = data.ram.total_gb;
+        node.ramData = data.ram;
+        node.history.ram.shift();
+        node.history.ram.push(node.ram);
+      }
+
+      if (data.disk) {
+        node.disk = Math.round(data.disk.percent);
+        node.diskData = data.disk;
+        node.history.disk.shift();
+        node.history.disk.push(node.disk);
+      }
+
+      if (data.processes) {
+        node.processes = data.processes;
+      }
+
+    } catch (err) {
+      node.status = 'offline';
+      node.history.cpu.shift();
+      node.history.cpu.push(0);
     }
-    if (data.processes && data.processes.length) active.processes = data.processes;
-
-    simulateFleet();
-  } catch (err) {
-    document.getElementById('connection-status').className = 'connection-status';
-    document.getElementById('status-text').textContent = `${active.name} (Offline - Simulating)`;
-    simulateFleet();
   }
-}
 
-// Master Loop
-function loop() {
-  if (state.mode === 'sim') {
-    simulateFleet();
+  // Update Status Banner
+  const active = getActiveNode();
+  const statusEl = document.getElementById('connection-status');
+  const statusTxt = document.getElementById('status-text');
+
+  if (active.status === 'online') {
+    statusEl.className = 'connection-status online';
+    statusTxt.textContent = `${active.name} (Online)`;
   } else {
-    fetchLocalAgentMetrics();
+    statusEl.className = 'connection-status';
+    statusTxt.textContent = 'Agent Offline (Run start-agent.bat)';
+  }
+
+  renderFleetBar();
+  updateActiveNodeBanner();
+
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+  } else {
+    updateDetailedView();
   }
 }
 
@@ -600,6 +490,7 @@ function applyTheme(theme) {
     if (btnText) btnText.textContent = 'Dark Mode';
   }
   localStorage.setItem('cm_theme', theme);
+  updateDetailedView();
 }
 
 function toggleTheme() {
@@ -608,37 +499,17 @@ function toggleTheme() {
   applyTheme(next);
 }
 
-// UI Event Listeners & Modals
+// UI Event Listeners
 function setupEvents() {
   const btnThemeToggle = document.getElementById('btn-theme-toggle');
-  if (btnThemeToggle) {
-    btnThemeToggle.addEventListener('click', toggleTheme);
-  }
+  if (btnThemeToggle) btnThemeToggle.addEventListener('click', toggleTheme);
 
   const btnDetailed = document.getElementById('btn-view-detailed');
   const btnFleet = document.getElementById('btn-view-fleet');
-  const btnSim = document.getElementById('btn-mode-sim');
-  const btnAgent = document.getElementById('btn-mode-agent');
   const searchInput = document.getElementById('proc-search');
 
   btnDetailed.addEventListener('click', () => switchViewMode('detailed'));
   btnFleet.addEventListener('click', () => switchViewMode('fleet'));
-
-  btnSim.addEventListener('click', () => {
-    state.mode = 'sim';
-    btnSim.classList.add('active');
-    btnAgent.classList.remove('active');
-    document.getElementById('connection-status').className = 'connection-status online';
-    document.getElementById('status-text').textContent = 'Active (1000ms)';
-  });
-
-  btnAgent.addEventListener('click', () => {
-    state.mode = 'agent';
-    btnAgent.classList.add('active');
-    btnSim.classList.remove('active');
-    document.getElementById('status-text').textContent = 'Connecting agent...';
-    fetchLocalAgentMetrics();
-  });
 
   searchInput.addEventListener('input', (e) => {
     state.searchQuery = e.target.value;
@@ -660,40 +531,40 @@ function setupEvents() {
     e.preventDefault();
     const name = document.getElementById('node-input-name').value.trim();
     const os = document.getElementById('node-input-os').value;
-    const url = document.getElementById('node-input-url').value.trim();
+    let url = document.getElementById('node-input-url').value.trim();
+    if (!url.endsWith('/metrics')) {
+      url = url.replace(/\/$/, '') + '/metrics';
+    }
 
-    let icon = '🖥️';
+    let icon = '💻';
     if (os.includes('Windows')) icon = '🪟';
     else if (os.includes('macOS')) icon = '🍎';
-    else if (os.includes('Linux') || os.includes('Ubuntu')) icon = '🐧';
+    else if (os.includes('Linux')) icon = '🐧';
 
     const newNode = {
       id: `node-custom-${Date.now()}`,
       name: name,
       os: os,
       osIcon: icon,
-      cpuModel: `${os} CPU`,
-      ramTotal: 16.0,
+      cpuModel: 'Hardware Telemetry',
+      ramTotal: 0,
       endpoint: url,
-      status: 'online',
-      ip: url.replace('http://', '').split(':')[0] || '192.168.1.X',
-      uptime: 100,
-      cpu: 25,
-      ram: 45,
-      disk: 50,
-      temp: 42,
-      ping: 15,
-      netDl: 50.0,
-      netUl: 10.0,
+      status: 'offline',
+      ip: url.replace('http://', '').replace('https://', '').split(':')[0] || 'Remote',
+      uptime: 0,
+      cpu: 0,
+      ram: 0,
+      disk: 0,
+      temp: '--',
+      ping: 0,
+      cores: [],
       history: {
-        cpu: new Array(30).fill(25),
-        ram: new Array(30).fill(45),
-        disk: new Array(30).fill(15),
-        net: new Array(30).fill(30),
+        cpu: new Array(30).fill(0),
+        ram: new Array(30).fill(0),
+        disk: new Array(30).fill(0),
+        net: new Array(30).fill(0),
       },
-      processes: [
-        { pid: 1001, name: 'system_daemon', cpu: 1.2, mem: 140, io: '0.1 MB/s', status: 'running' }
-      ]
+      processes: []
     };
 
     state.nodes.push(newNode);
@@ -701,9 +572,10 @@ function setupEvents() {
     selectNode(newNode.id);
     addModal.classList.remove('active');
     addForm.reset();
+    pollRealFleet();
   });
 
-  // Agent Modal
+  // Help Modal
   const agentModal = document.getElementById('agent-modal');
   const btnHelp = document.getElementById('btn-agent-help');
   const btnCloseAgent = document.getElementById('modal-close');
@@ -722,37 +594,19 @@ function setupEvents() {
   }
 
   window.addEventListener('resize', () => {
-    const active = getActiveNode();
-    drawSparkline(canvases.cpu, active.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
-    drawSparkline(canvases.ram, active.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
-    drawSparkline(canvases.disk, active.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
-    drawSparkline(canvases.net, active.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
+    updateDetailedView();
   });
 }
 
 // App Entry Point
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
-  initCores();
   setupEvents();
   renderFleetBar();
   updateActiveNodeBanner();
-  renderProcesses();
+  updateDetailedView();
 
-  // Check URL parameter for auto-linking: e.g. ?mode=agent
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('mode') === 'agent' || window.location.hash === '#agent') {
-    const btnAgent = document.getElementById('btn-mode-agent');
-    const btnSim = document.getElementById('btn-mode-sim');
-    if (btnAgent && btnSim) {
-      state.mode = 'agent';
-      btnAgent.classList.add('active');
-      btnSim.classList.remove('active');
-      document.getElementById('status-text').textContent = 'Connecting agent...';
-      fetchLocalAgentMetrics();
-    }
-  }
-
-  loop();
-  setInterval(loop, 1200);
+  // Initial poll and recurring loop
+  pollRealFleet();
+  setInterval(pollRealFleet, 1500);
 });

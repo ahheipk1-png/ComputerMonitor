@@ -71,7 +71,22 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         if HAS_PSUTIL:
             # CPU
             metrics['cpu'] = psutil.cpu_percent(interval=None)
+            metrics['cores'] = psutil.cpu_percent(percpu=True)
+            metrics['cpu_count'] = psutil.cpu_count(logical=True) or len(metrics['cores'])
             
+            try:
+                freq = psutil.cpu_freq()
+                if freq and freq.current:
+                    metrics['cpu_freq'] = f"{round(freq.current / 1000, 2)} GHz" if freq.current > 1000 else f"{round(freq.current, 0)} MHz"
+            except Exception:
+                pass
+
+            # Real System Uptime
+            try:
+                metrics['uptime'] = int(time.time() - psutil.boot_time())
+            except Exception:
+                metrics['uptime'] = 0
+
             # RAM
             mem = psutil.virtual_memory()
             metrics['ram'] = {
@@ -94,10 +109,20 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # Network counters
+            try:
+                net = psutil.net_io_counters()
+                metrics['net'] = {
+                    'bytes_sent': net.bytes_sent,
+                    'bytes_recv': net.bytes_recv,
+                }
+            except Exception:
+                pass
+
             # Top Processes by CPU
             procs = []
-            for p in sorted(psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info']),
-                            key=lambda x: (x.info.get('cpu_percent') or 0), reverse=True)[:10]:
+            for p in sorted(psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info', 'status']),
+                            key=lambda x: (x.info.get('cpu_percent') or 0), reverse=True)[:15]:
                 try:
                     mem_mb = round((p.info['memory_info'].rss or 0) / (1024 * 1024), 1)
                     procs.append({
@@ -106,15 +131,14 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                         'cpu': round(p.info['cpu_percent'] or 0.0, 1),
                         'mem': mem_mb,
                         'io': 'Active',
-                        'status': 'running'
+                        'status': p.info.get('status') or 'running'
                     })
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
             metrics['processes'] = procs
         else:
-            # Fallback
-            metrics['cpu'] = 24.5
-            metrics['ram'] = {'total_gb': 16.0, 'used_gb': 7.2, 'free_gb': 8.8, 'percent': 45.0}
+            metrics['cpu'] = 0
+            metrics['ram'] = {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0}
             metrics['processes'] = []
 
         return metrics
