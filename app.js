@@ -559,10 +559,12 @@ function renderProcesses() {
 
     tr.innerHTML = `
       <td class="proc-name-cell">
-        <span class="proc-chevron" data-group="${gkey}">${hasMultiple ? (isExpanded ? '▼' : '▶') : '&nbsp;'}</span>
-        <span class="proc-icon"></span>
-        <span style="font-weight: 600;">${escapeHtml(g.name)}</span>
-        ${hasMultiple ? `<span class="proc-count-badge">${g.count}</span>` : ''}
+        <div class="proc-name-flex">
+          <span class="proc-chevron ${hasMultiple ? 'expandable' : 'empty'}" data-group="${gkey}">${hasMultiple ? (isExpanded ? '▼' : '▶') : ''}</span>
+          <span class="proc-icon"></span>
+          <span class="proc-title" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</span>
+          ${hasMultiple ? `<span class="proc-count-badge">${g.count}</span>` : ''}
+        </div>
       </td>
       <td class="font-mono">${pidDisplay}</td>
       <td class="font-mono heat-cell ${cpuClass}">${g.cpu.toFixed(1)}%</td>
@@ -591,10 +593,13 @@ function renderProcesses() {
         const instCpuClass = inst.cpu > 15 ? 'heat-cpu-high' : (inst.cpu > 0 ? 'heat-cpu-active' : '');
 
         childTr.innerHTML = `
-          <td class="proc-child-cell">
-            <span class="proc-child-branch">└─</span>
-            <span>${escapeHtml(inst.name)}</span>
-            <span style="color: var(--text-dim); font-size: 0.72rem; margin-left: 6px;">(#${idx + 1})</span>
+          <td class="proc-name-cell">
+            <div class="proc-name-flex proc-child-indent">
+              <span class="proc-child-branch">└─</span>
+              <span class="proc-child-icon"></span>
+              <span class="proc-child-name" title="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</span>
+              <span class="proc-child-idx">(#${idx + 1})</span>
+            </div>
           </td>
           <td class="font-mono font-bold" style="color: var(--cyan);">${inst.pid}</td>
           <td class="font-mono heat-cell ${instCpuClass}">${inst.cpu.toFixed(1)}%</td>
@@ -928,7 +933,8 @@ function setupEvents() {
       const groupRow = e.target.closest('.proc-group-row');
       if (groupRow) {
         const groupKey = groupRow.dataset.group;
-        if (groupKey) {
+        const chevron = groupRow.querySelector('.proc-chevron.expandable');
+        if (groupKey && chevron) {
           if (state.expandedGroups.has(groupKey)) {
             state.expandedGroups.delete(groupKey);
           } else {

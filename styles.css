@@ -1181,18 +1181,60 @@ body {
 .proc-name-cell {
   font-family: var(--font-sans) !important;
   color: var(--text-main) !important;
-  font-weight: 500;
+  vertical-align: middle;
+}
+
+.proc-name-flex {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
+}
+
+.proc-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  user-select: none;
+  border-radius: 3px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.proc-chevron.expandable {
+  cursor: pointer;
+}
+
+.proc-chevron.expandable:hover {
+  color: var(--cyan);
+  background: rgba(2, 132, 199, 0.1);
+}
+
+.proc-chevron.empty {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .proc-icon {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 2px;
-  background: var(--cyan);
+  background: rgba(2, 132, 199, 0.25);
+  border: 1px solid var(--cyan);
+  flex-shrink: 0;
+}
+
+.proc-title {
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-badge {
@@ -1512,15 +1554,39 @@ body {
   background-color: var(--bg-surface);
 }
 
-.proc-child-cell {
-  padding-left: 32px !important;
-  color: var(--text-muted);
+.proc-child-indent {
+  padding-left: 20px;
 }
 
 .proc-child-branch {
   color: var(--text-dim);
-  margin-right: 6px;
-  font-family: monospace;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.proc-child-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(168, 85, 247, 0.3);
+  border: 1px solid var(--purple);
+  flex-shrink: 0;
+}
+
+.proc-child-name {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proc-child-idx {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  flex-shrink: 0;
 }
 
 /* Task Manager Heatmap Tints */
