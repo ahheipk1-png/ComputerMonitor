@@ -29,11 +29,11 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-# Critical Windows & System processes protected from accidental termination
+# Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
     'system', 'system idle process', 'registry', 'smss.exe', 'csrss.exe',
     'wininit.exe', 'services.exe', 'lsass.exe', 'svchost.exe', 'fontdrvhost.exe',
-    'winlogon.exe', 'dwm.exe', 'computermonitoragent.exe'
+    'winlogon.exe', 'dwm.exe'
 }
 
 # Global thread-safe metrics cache
@@ -245,10 +245,18 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                         self.wfile.write(json.dumps({'success': False, 'error': 'Invalid PID'}).encode('utf-8'))
                         return
 
-                    if pid in (0, 4) or pid == os.getpid():
+                    if pid in (0, 4):
                         self.send_response(200)
                         self.end_headers()
-                        self.wfile.write(json.dumps({'success': False, 'error': 'Cannot terminate Windows system kernel or agent PID'}).encode('utf-8'))
+                        self.wfile.write(json.dumps({'success': False, 'error': 'Cannot terminate Windows system kernel (PID 0 or 4)'}).encode('utf-8'))
+                        return
+
+                    if pid == os.getpid():
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': True, 'message': 'ComputerMonitorAgent stopped successfully'}).encode('utf-8'))
+                        self.wfile.flush()
+                        threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0)), daemon=True).start()
                         return
 
                     try:
@@ -258,6 +266,14 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                             self.send_response(200)
                             self.end_headers()
                             self.wfile.write(json.dumps({'success': False, 'error': f"Terminating critical OS process '{name}' is protected"}).encode('utf-8'))
+                            return
+
+                        if name.lower() in ('computermonitoragent.exe', 'computermonitoragent'):
+                            self.send_response(200)
+                            self.end_headers()
+                            self.wfile.write(json.dumps({'success': True, 'message': f"Process '{name}' (PID {pid}) stopped successfully"}).encode('utf-8'))
+                            self.wfile.flush()
+                            threading.Thread(target=lambda: (time.sleep(0.3), p.terminate(), os._exit(0)), daemon=True).start()
                             return
 
                         p.terminate()
@@ -288,6 +304,14 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                         self.send_response(200)
                         self.end_headers()
                         self.wfile.write(json.dumps({'success': False, 'error': f"Process '{proc_name}' is a protected Windows system process"}).encode('utf-8'))
+                        return
+
+                    if target_name in ('computermonitoragent', 'computermonitoragent.exe'):
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': True, 'message': 'ComputerMonitorAgent stopped successfully'}).encode('utf-8'))
+                        self.wfile.flush()
+                        threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0)), daemon=True).start()
                         return
 
                     killed = []
