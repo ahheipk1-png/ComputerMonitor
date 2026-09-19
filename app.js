@@ -906,6 +906,48 @@ function setupEvents() {
     });
   }
 
+  // Download Agent Modal Listeners
+  const downloadModal = document.getElementById('download-agent-modal');
+  const btnOpenDownloadModal = document.getElementById('btn-open-download-modal');
+  const btnCloseDownloadModal = document.getElementById('download-modal-close');
+  const btnFooterDownload = document.getElementById('btn-footer-download');
+  const linkModalOpenDownload = document.getElementById('link-modal-open-download');
+  const btnCopyPsCmd = document.getElementById('btn-copy-ps-cmd');
+  const psCmdText = document.getElementById('ps-cmd-text');
+
+  const openDownloadModal = (e) => {
+    if (e) e.preventDefault();
+    if (addModal) addModal.classList.remove('active');
+    if (downloadModal) downloadModal.classList.add('active');
+  };
+
+  const closeDownloadModal = () => {
+    if (downloadModal) downloadModal.classList.remove('active');
+  };
+
+  if (btnOpenDownloadModal) btnOpenDownloadModal.addEventListener('click', openDownloadModal);
+  if (btnFooterDownload) btnFooterDownload.addEventListener('click', openDownloadModal);
+  if (linkModalOpenDownload) linkModalOpenDownload.addEventListener('click', openDownloadModal);
+  if (btnCloseDownloadModal) btnCloseDownloadModal.addEventListener('click', closeDownloadModal);
+  if (downloadModal) {
+    downloadModal.addEventListener('click', (e) => {
+      if (e.target === downloadModal) closeDownloadModal();
+    });
+  }
+
+  if (btnCopyPsCmd && psCmdText) {
+    btnCopyPsCmd.addEventListener('click', () => {
+      navigator.clipboard.writeText(psCmdText.textContent.trim()).then(() => {
+        btnCopyPsCmd.textContent = 'Copied! ✅';
+        setTimeout(() => {
+          btnCopyPsCmd.textContent = '📋 Copy Command';
+        }, 2500);
+      }).catch(() => {
+        showToast('Command copied to clipboard!');
+      });
+    });
+  }
+
   // Process Table Interaction Event Delegation (Expand/Collapse & Stop/End Task)
   const procTbody = document.getElementById('proc-table-body');
   if (procTbody) {
