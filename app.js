@@ -194,6 +194,7 @@ function handleIncomingNodeTelemetry(data) {
   // Update telemetry metrics
   node.status = 'online';
   node.lastSeen = new Date();
+  node.rawHostname = hostname;
   if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
     node.alias = data.alias.trim();
   }
@@ -645,24 +646,32 @@ function showToast(message, isError = false) {
 async function requestStopProcess(identifier, isPid = true) {
   const node = getActiveNode();
   if (node.status !== 'online') {
-    showToast(`Cannot stop process: Computer [${node.name}] is offline.`, true);
+    showToast(`Cannot stop process: Computer [${getNodeDisplayName(node)}] is offline.`, true);
     return;
   }
 
+  const targetHost = node.rawHostname || node.name;
+  const dispName = getNodeDisplayName(node);
+
   // 1. Dispatch over MQTT Cloud Fleet channel
   if (mqttFleetClient && mqttFleetClient.connected) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
     mqttFleetClient.publish(cmdTopic, JSON.stringify({
       action: 'kill',
       identifier: identifier,
+      val: identifier,
       isPid: isPid
     }));
-    showToast(`Stopping process [${identifier}] on [${node.name}]...`);
+    showToast(`Stopping process [${identifier}] on [${dispName}]...`);
   }
 
-  // 2. Direct HTTP fallback if endpoint is HTTP
-  if (node.endpoint && node.endpoint.startsWith('http')) {
-    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+  // 2. Direct LAN HTTP fallback if available
+  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
+  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
+    ? node.endpoint.replace(/\/metrics\/?$/, '') 
+    : (ip ? `http://${ip}:5500` : null);
+
+  if (baseUrl) {
     const killUrl = `${baseUrl}/kill`;
     const payload = isPid ? { pid: parseInt(identifier, 10) } : { name: identifier.trim() };
 
@@ -679,7 +688,6 @@ async function requestStopProcess(identifier, isPid = true) {
       const data = await res.json();
       if (res.ok && data.success) {
         showToast(data.message || 'Process stopped successfully!');
-        pollRealFleet();
       }
     } catch (_) {}
   }
@@ -688,24 +696,19 @@ async function requestStopProcess(identifier, isPid = true) {
 let pendingRestartNodeId = null;
 
 function openRestartModal(nodeId) {
-  const node = (nodeId ? state.nodes.find(n => n.id === nodeId) : null) || getActiveNode();
-  if (node.status !== 'online') {
-    showToast(`Cannot restart: Computer [${node.name}] is currently offline.`, true);
-    return;
-  }
-  pendingRestartNodeId = node.id;
-  const modal = document.getElementById('restart-computer-modal');
-  const targetLabel = document.getElementById('restart-target-node');
-  if (targetLabel) {
-    targetLabel.textContent = `${node.name} (${node.ip || node.endpoint})`;
-  }
+  pendingRestartNodeId = nodeId;
+  const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
+  const nameEl = document.getElementById('restart-node-target-name');
+  if (nameEl) nameEl.textContent = getNodeDisplayName(node);
+
+  const modal = document.getElementById('restart-confirm-modal');
   if (modal) modal.classList.add('active');
 }
 
 function closeRestartModal() {
-  const modal = document.getElementById('restart-computer-modal');
-  if (modal) modal.classList.remove('active');
   pendingRestartNodeId = null;
+  const modal = document.getElementById('restart-confirm-modal');
+  if (modal) modal.classList.remove('active');
 }
 
 async function executeRestartComputer() {
@@ -713,25 +716,32 @@ async function executeRestartComputer() {
   const node = state.nodes.find(n => n.id === pendingRestartNodeId) || getActiveNode();
   closeRestartModal();
 
+  const targetHost = node.rawHostname || node.name;
+  const dispName = getNodeDisplayName(node);
+
   // 1. Dispatch over MQTT Cloud Fleet channel
   if (mqttFleetClient && mqttFleetClient.connected) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
     mqttFleetClient.publish(cmdTopic, JSON.stringify({
       action: 'restart',
       delay: 5
     }));
-    showToast(`🔄 Reboot signal dispatched to [${node.name}]...`);
+    showToast(`🔄 Reboot signal dispatched to [${dispName}]...`);
     const alertBanner = document.getElementById('agent-alert-banner');
     const alertTitle = document.getElementById('alert-title');
     const alertDesc = document.getElementById('alert-desc');
     if (alertBanner) alertBanner.style.display = 'flex';
     if (alertTitle) alertTitle.textContent = 'SYSTEM REBOOT IN PROGRESS';
-    if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${node.name}. Machine will reboot and automatically reconnect once startup completes.`;
+    if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${dispName}. Machine will reboot and automatically reconnect once startup completes.`;
   }
 
   // 2. Direct HTTP fallback if endpoint is HTTP
-  if (node.endpoint && node.endpoint.startsWith('http')) {
-    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
+  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
+    ? node.endpoint.replace(/\/metrics\/?$/, '') 
+    : (ip ? `http://${ip}:5500` : null);
+
+  if (baseUrl) {
     const restartUrl = `${baseUrl}/restart`;
 
     try {

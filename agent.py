@@ -496,14 +496,30 @@ def handle_remote_command(msg_bytes):
             if not val or not HAS_PSUTIL:
                 return
             if is_pid or val.isdigit():
-                pid = int(val)
-                p = psutil.Process(pid)
-                p.terminate()
+                try:
+                    pid = int(val)
+                    if pid not in (0, 4) and pid != os.getpid():
+                        p = psutil.Process(pid)
+                        p.terminate()
+                        try:
+                            p.wait(timeout=0.8)
+                        except psutil.TimeoutExpired:
+                            p.kill()
+                except Exception:
+                    pass
             else:
-                for p in psutil.process_iter(['name']):
+                target = val.lower()
+                target_exe = target if target.endswith('.exe') else f"{target}.exe"
+                for p in psutil.process_iter(['name', 'pid']):
                     try:
-                        if p.info['name'].lower() == val.lower():
-                            p.terminate()
+                        pname = (p.info['name'] or '').lower()
+                        if (pname == target or pname == target_exe) and p.info['pid'] not in (0, 4) and p.info['pid'] != os.getpid():
+                            proc = psutil.Process(p.info['pid'])
+                            proc.terminate()
+                            try:
+                                proc.wait(timeout=0.8)
+                            except psutil.TimeoutExpired:
+                                proc.kill()
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
         elif action == 'set_alias':
