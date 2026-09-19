@@ -34,6 +34,34 @@ AGENT_EXE_PATH = os.path.join(BASE_DIR, EXE_NAME)
 
 
 def get_local_ip():
+    """Discover primary LAN Wi-Fi or Ethernet IP, filtering out VPN/virtual adapters."""
+    vpn_keywords = ['surfshark', 'wireguard', 'openvpn', 'vethernet', 'tap', 'tun', 'docker', 'vmware', 'virtual', 'loopback', 'hyper-v']
+    lan_keywords = ['wi-fi', 'wifi', 'wlan', 'ethernet', 'local area connection', 'en0', 'eth0', 'wlan0']
+
+    try:
+        if psutil:
+            candidates = []
+            for iface, addr_list in psutil.net_if_addrs().items():
+                iface_lower = iface.lower()
+                if any(vk in iface_lower for vk in vpn_keywords):
+                    continue
+                for a in addr_list:
+                    import socket
+                    if a.family == socket.AF_INET and not a.address.startswith('127.') and not a.address.startswith('169.254.'):
+                        score = 0
+                        if any(lk in iface_lower for lk in lan_keywords):
+                            score += 10
+                        if a.address.startswith('192.168.'):
+                            score += 5
+                        elif a.address.startswith('10.'):
+                            score += 2
+                        candidates.append((score, a.address))
+            if candidates:
+                candidates.sort(reverse=True)
+                return candidates[0][1]
+    except Exception:
+        pass
+
     try:
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -174,7 +202,7 @@ class App(tk.Tk):
         btn_grid.columnconfigure(1, weight=1)
 
         # Open Dashboard Button
-        btn_dash = tk.Button(actions_box, text="🌐 Open Website Dashboard", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=lambda: webbrowser.open(DASHBOARD_URL))
+        btn_dash = tk.Button(actions_box, text="🌐 Open Dashboard (Browser)", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=self.open_dashboard)
         btn_dash.pack(fill="x", pady=(8, 0))
 
         # Stop Specific Process Section
@@ -296,12 +324,23 @@ class App(tk.Tk):
 
     def copy_url_to_clipboard(self):
         try:
+            ip = get_local_ip()
+            url = f"http://{ip}:5500"
+            self.my_url = url
+            self.lbl_endpoint.config(text=url)
             self.clipboard_clear()
-            self.clipboard_append(self.my_url)
-            self.log(f"Copied {self.my_url} to clipboard!")
-            messagebox.showinfo("Copied", f"Copied to clipboard:\n{self.my_url}\n\nPaste this into 'Add Computer' on the website dashboard.")
+            self.clipboard_append(url)
+            self.log(f"Copied {url} to clipboard!")
+            messagebox.showinfo("Copied to Clipboard", f"Copied:\n{url}\n\n• On any other computer on your Wi-Fi:\n  Open this link directly in Chrome or Edge.\n\n• On the Cloudflare website:\n  Paste into 'Add Computer' or open:\n  {DASHBOARD_URL}/?ip={ip}")
         except Exception:
             pass
+
+    def open_dashboard(self):
+        ip = get_local_ip()
+        if self.proc_running:
+            webbrowser.open(f"http://{ip}:5500")
+        else:
+            webbrowser.open(f"{DASHBOARD_URL}/?ip={ip}")
 
     def start_agent(self):
         if not ensure_agent_exe():

@@ -18,6 +18,11 @@ import time
 
 PORT = 5500
 
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 if hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -43,9 +48,10 @@ LATEST_METRICS = {
     'os': f"{platform.system()} {platform.release()}",
     'arch': platform.machine(),
     'cpu': 0,
+    'cpu_freq': '-- GHz',
+    'cpu_count': os.cpu_count() or 4,
     'cores': [],
-    'cpu_count': 0,
-    'uptime': 0,
+    'temp': '--',
     'ram': {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0},
     'disk': {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0},
     'net': {'bytes_sent': 0, 'bytes_recv': 0},
@@ -55,7 +61,33 @@ METRICS_LOCK = threading.Lock()
 
 
 def get_local_ip():
-    """Discover primary LAN IP address of this machine."""
+    """Discover primary LAN Wi-Fi or Ethernet IP, filtering out VPN/virtual adapters."""
+    vpn_keywords = ['surfshark', 'wireguard', 'openvpn', 'vethernet', 'tap', 'tun', 'docker', 'vmware', 'virtual', 'loopback', 'hyper-v']
+    lan_keywords = ['wi-fi', 'wifi', 'wlan', 'ethernet', 'local area connection', 'en0', 'eth0', 'wlan0']
+
+    try:
+        if HAS_PSUTIL:
+            candidates = []
+            for iface, addr_list in psutil.net_if_addrs().items():
+                iface_lower = iface.lower()
+                if any(vk in iface_lower for vk in vpn_keywords):
+                    continue
+                for a in addr_list:
+                    if a.family == socket.AF_INET and not a.address.startswith('127.') and not a.address.startswith('169.254.'):
+                        score = 0
+                        if any(lk in iface_lower for lk in lan_keywords):
+                            score += 10
+                        if a.address.startswith('192.168.'):
+                            score += 5
+                        elif a.address.startswith('10.'):
+                            score += 2
+                        candidates.append((score, a.address))
+            if candidates:
+                candidates.sort(reverse=True)
+                return candidates[0][1]
+    except Exception:
+        pass
+
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(('8.8.8.8', 80))
@@ -455,7 +487,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': 'Not Found'}).encode('utf-8'))
 
     def do_GET(self):
-        if self.path == '/metrics' or self.path == '/':
+        if self.path == '/metrics':
             try:
                 with METRICS_LOCK:
                     payload = json.dumps(LATEST_METRICS).encode('utf-8')
@@ -465,9 +497,51 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(payload)
             except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
                 pass
+            return
+
+        # Serve web dashboard files
+        clean_path = self.path.split('?')[0]
+        if clean_path in ('/', '/index.html'):
+            fname = 'index.html'
+            ctype = 'text/html; charset=utf-8'
+        elif clean_path == '/styles.css':
+            fname = 'styles.css'
+            ctype = 'text/css; charset=utf-8'
+        elif clean_path == '/app.js':
+            fname = 'app.js'
+            ctype = 'application/javascript; charset=utf-8'
+        elif clean_path == '/ComputerMonitorControl.exe':
+            fname = 'ComputerMonitorControl.exe'
+            ctype = 'application/octet-stream'
+        elif clean_path == '/ComputerMonitorAgent.exe':
+            fname = 'ComputerMonitorAgent.exe'
+            ctype = 'application/octet-stream'
         else:
             self.send_response(404)
             self.end_headers()
+            self.wfile.write(b'{"error": "Not Found"}')
+            return
+
+        file_path = os.path.join(BASE_DIR, fname)
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', ctype)
+                self.send_header('Content-Length', str(len(content)))
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache')
+                http.server.BaseHTTPRequestHandler.end_headers(self)
+                self.wfile.write(content)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b'{"error": "File Not Found"}')
 
     def log_message(self, format, *args):
         # Quiet logger so console stays clean

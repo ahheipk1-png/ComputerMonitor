@@ -12,9 +12,9 @@ const DEFAULT_NODES = [
     osIcon: '💻',
     cpuModel: 'Hardware Telemetry',
     ramTotal: 0,
-    endpoint: 'http://localhost:5500/metrics',
+    endpoint: (typeof window !== 'undefined' && window.location.port === '5500') ? `${window.location.origin}/metrics` : 'http://localhost:5500/metrics',
     status: 'offline',
-    ip: 'localhost',
+    ip: (typeof window !== 'undefined' && window.location.hostname) ? window.location.hostname : 'localhost',
     uptime: 0,
     cpu: 0,
     ram: 0,
@@ -218,8 +218,25 @@ function updateActiveNodeBanner() {
 
   if (!isOnline) {
     if (alertBanner) alertBanner.style.display = 'flex';
-    if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
-    if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
+    const isHttps = window.location.protocol === 'https:';
+    const isRemoteHttp = node.endpoint.startsWith('http://') && !node.endpoint.includes('localhost') && !node.endpoint.includes('127.0.0.1');
+
+    if (isHttps && isRemoteHttp) {
+      if (alertTitle) alertTitle.textContent = 'BROWSER MIXED CONTENT BLOCK / OFFLINE';
+      if (alertDesc) {
+        alertDesc.innerHTML = `Host [<b>${node.name}</b>] (${node.endpoint}) cannot be reached from HTTPS.<br>
+        Web browsers block HTTPS websites from querying local network HTTP devices.<br>
+        <span style="display:inline-block; margin-top: 6px;">
+          👉 <b>Direct Dashboard:</b> <a href="http://${node.ip}:5500" target="_blank" style="color: var(--cyan); text-decoration: underline; font-weight: bold;">Open http://${node.ip}:5500</a> directly in your browser.
+        </span><br>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          Or click the padlock/tune icon in the browser address bar &rarr; Site settings &rarr; Insecure content &rarr; Allow.
+        </span>`;
+      }
+    } else {
+      if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
+      if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
+    }
     if (alertLastSeen) alertLastSeen.textContent = node.lastSeen ? `Last Active: ${node.lastSeen.toLocaleTimeString()}` : 'Last Active: Never';
     if (metaScheduler) {
       metaScheduler.textContent = 'STOPPED / UNREACHABLE';
@@ -1110,12 +1127,68 @@ function setupEvents() {
   window.addEventListener('resize', () => {
     updateDetailedView();
   });
+// Check URL parameters for instant node auto-connection (e.g. ?ip=192.168.10.117)
+function checkUrlAutoConnect() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get('ip') || params.get('connect') || params.get('agent');
+    if (target) {
+      let cleanIp = target.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      let host = cleanIp;
+      let port = '5500';
+      if (cleanIp.includes(':')) {
+        [host, port] = cleanIp.split(':');
+      }
+      const endpoint = `http://${host}:${port}/metrics`;
+
+      let existingNode = state.nodes.find(n => n.endpoint === endpoint || n.ip === host);
+      if (!existingNode) {
+        existingNode = {
+          id: `node-${host.replace(/[^a-zA-Z0-9]/g, '-')}`,
+          name: `Computer (${host})`,
+          os: 'Detecting...',
+          osIcon: '💻',
+          cpuModel: 'Hardware Telemetry',
+          ramTotal: 0,
+          endpoint: endpoint,
+          status: 'offline',
+          ip: host,
+          uptime: 0,
+          cpu: 0,
+          ram: 0,
+          disk: 0,
+          temp: '--',
+          ping: 0,
+          cores: [],
+          history: {
+            cpu: new Array(30).fill(0),
+            ram: new Array(30).fill(0),
+            disk: new Array(30).fill(0),
+            net: new Array(30).fill(0),
+          },
+          processes: []
+        };
+        state.nodes.push(existingNode);
+        saveNodes();
+      }
+      state.selectedNodeId = existingNode.id;
+    } else if (window.location.port === '5500') {
+      const localNode = state.nodes.find(n => n.id === 'node-local');
+      if (localNode) {
+        localNode.endpoint = `${window.location.origin}/metrics`;
+        localNode.ip = window.location.hostname;
+      }
+    }
+  } catch (err) {
+    console.warn('URL auto-connect check encountered an error:', err);
+  }
 }
 
 // App Entry Point
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupEvents();
+  checkUrlAutoConnect();
   renderFleetBar();
   updateActiveNodeBanner();
   updateDetailedView();
