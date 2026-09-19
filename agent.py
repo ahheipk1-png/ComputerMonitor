@@ -92,6 +92,7 @@ def background_metrics_collector():
     cycle = 0
     cached_sched = {"installed": True, "status": "Checking..."}
     cached_procs = []
+    cached_groups = []
     num_cpus = psutil.cpu_count(logical=True) or 1 if HAS_PSUTIL else 1
 
     while True:
@@ -158,12 +159,14 @@ def background_metrics_collector():
                 except Exception:
                     pass
 
-                # 2. Update Top Processes every 3.0 seconds (saves 90% CPU)
-                # Omit 'status' query to prevent Windows kernel locks
+                # 2. Update All Processes grouped by name every 3.0 seconds (Task Manager style)
+                # Does NOT omit processes with 0% CPU
                 # Exclude System Idle Process (PID 0)
                 # Normalize CPU% across logical cores (0-100% total system scale)
-                if cycle % 3 == 0 or not cached_procs:
-                    procs = []
+                if cycle % 3 == 0 or not cached_groups:
+                    groups = {}
+                    all_flat = []
+
                     for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info']):
                         try:
                             pid = p.info['pid']
@@ -175,24 +178,50 @@ def background_metrics_collector():
                             # Normalize by total logical CPUs like Windows Task Manager
                             norm_cpu = round(raw_cpu / num_cpus, 1)
                             mem_mb = round((p.info['memory_info'].rss or 0) / (1024 * 1024), 1)
-                            procs.append({
+
+                            proc_item = {
                                 'pid': pid,
                                 'name': name,
                                 'cpu': norm_cpu,
                                 'mem': mem_mb,
                                 'io': 'Active',
                                 'status': 'running'
-                            })
+                            }
+                            all_flat.append(proc_item)
+
+                            # Group by lowercased application name
+                            gkey = name.lower()
+                            if gkey not in groups:
+                                groups[gkey] = {
+                                    'name': name,
+                                    'count': 0,
+                                    'cpu': 0.0,
+                                    'mem': 0.0,
+                                    'io': 'Active',
+                                    'status': 'running',
+                                    'instances': []
+                                }
+                            g = groups[gkey]
+                            g['count'] += 1
+                            g['cpu'] = round(g['cpu'] + norm_cpu, 1)
+                            g['mem'] = round(g['mem'] + mem_mb, 1)
+                            g['instances'].append(proc_item)
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             continue
 
-                    # Sort by CPU descending, top 12
-                    cached_procs = sorted(procs, key=lambda x: x['cpu'], reverse=True)[:12]
+                    # Sort children inside each group by CPU descending then Mem descending
+                    for g in groups.values():
+                        g['instances'].sort(key=lambda x: (x['cpu'], x['mem']), reverse=True)
 
+                    cached_groups = list(groups.values())
+                    cached_procs = all_flat
+
+                m['process_groups'] = cached_groups
                 m['processes'] = cached_procs
             else:
                 m['cpu'] = 0
                 m['ram'] = {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0}
+                m['process_groups'] = []
                 m['processes'] = []
 
             with METRICS_LOCK:

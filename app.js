@@ -42,6 +42,7 @@ const state = {
   searchQuery: '',
   sortCol: 'cpu',
   sortDir: 'desc',
+  expandedGroups: new Set(),
 };
 
 // Canvas references
@@ -381,22 +382,59 @@ function updateSortIndicators() {
   });
 }
 
-// Render Real Processes
+// Render Real Processes (Task Manager Grouped & Expandable)
 function renderProcesses() {
   const node = getActiveNode();
   const tbody = document.getElementById('proc-table-body');
   const countSpan = document.getElementById('proc-display-count');
   const query = state.searchQuery.toLowerCase();
 
-  const procs = (node.processes || []).slice();
-  const filtered = procs.filter(p => 
-    p.name.toLowerCase().includes(query) || p.pid.toString().includes(query)
-  );
+  // Get groups (or fallback to creating groups from flat list if older agent)
+  let groups = node.processGroups ? node.processGroups.slice() : [];
+  if (!groups.length && node.processes && node.processes.length) {
+    const gmap = {};
+    node.processes.forEach(p => {
+      const gkey = p.name.toLowerCase();
+      if (!gmap[gkey]) {
+        gmap[gkey] = {
+          name: p.name,
+          count: 0,
+          cpu: 0,
+          mem: 0,
+          io: p.io || 'Active',
+          status: p.status || 'running',
+          instances: []
+        };
+      }
+      gmap[gkey].count += 1;
+      gmap[gkey].cpu = Math.round((gmap[gkey].cpu + p.cpu) * 10) / 10;
+      gmap[gkey].mem = Math.round((gmap[gkey].mem + p.mem) * 10) / 10;
+      gmap[gkey].instances.push(p);
+    });
+    groups = Object.values(gmap);
+  }
 
-  // Column Sorting
+  // Filter groups by search query (match group name or any child PID)
+  const filtered = groups.filter(g => {
+    if (!query) return true;
+    if (g.name.toLowerCase().includes(query)) return true;
+    return (g.instances || []).some(inst => 
+      inst.pid.toString().includes(query) || inst.name.toLowerCase().includes(query)
+    );
+  });
+
+  // Multi-column sorting
   filtered.sort((a, b) => {
-    let valA = a[state.sortCol];
-    let valB = b[state.sortCol];
+    let valA, valB;
+
+    if (state.sortCol === 'pid') {
+      valA = a.instances && a.instances[0] ? a.instances[0].pid : 0;
+      valB = b.instances && b.instances[0] ? b.instances[0].pid : 0;
+      return state.sortDir === 'asc' ? (valA - valB) : (valB - valA);
+    }
+
+    valA = a[state.sortCol];
+    valB = b[state.sortCol];
 
     if (typeof valA === 'string' || typeof valB === 'string') {
       valA = String(valA || '').toLowerCase();
@@ -411,39 +449,96 @@ function renderProcesses() {
 
   updateSortIndicators();
 
-  countSpan.textContent = `Showing ${filtered.length} processes`;
+  const totalProcsCount = filtered.reduce((acc, g) => acc + (g.count || 1), 0);
+  countSpan.textContent = `Showing ${filtered.length} applications (${totalProcsCount} processes)`;
   tbody.innerHTML = '';
 
-  if (!procs.length) {
+  if (!filtered.length) {
     tbody.innerHTML = `
       <tr>
         <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-dim);">
-          ${node.status === 'online' ? 'No processes to display.' : '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.'}
+          ${node.status === 'online' ? 'No processes found matching filter.' : '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.'}
         </td>
       </tr>
     `;
     return;
   }
 
-  filtered.forEach(p => {
+  filtered.forEach(g => {
+    const gkey = g.name.toLowerCase();
+    const hasMultiple = (g.count || 1) > 1;
+    const isExpanded = state.expandedGroups.has(gkey);
+
+    const memFormatted = g.mem >= 1024 
+      ? `${(g.mem / 1024).toFixed(1)} GB` 
+      : `${g.mem.toFixed(1)} MB`;
+
+    // Task Manager style heatmap tinting
+    const cpuClass = g.cpu > 15 ? 'heat-cpu-high' : (g.cpu > 0 ? 'heat-cpu-active' : '');
+    const memClass = g.mem >= 2048 ? 'heat-mem-high' : (g.mem >= 500 ? 'heat-mem-med' : (g.mem >= 100 ? 'heat-mem-low' : ''));
+
+    // Parent group row
     const tr = document.createElement('tr');
+    tr.className = `proc-group-row ${isExpanded ? 'expanded' : ''}`;
+    tr.dataset.group = gkey;
+
+    const pidDisplay = hasMultiple 
+      ? `<span style="color: var(--text-dim); font-size: 0.75rem;">${g.count} procs</span>` 
+      : (g.instances && g.instances[0] ? g.instances[0].pid : '--');
+
     tr.innerHTML = `
-      <td>${p.pid}</td>
       <td class="proc-name-cell">
+        <span class="proc-chevron" data-group="${gkey}">${hasMultiple ? (isExpanded ? '▼' : '▶') : '&nbsp;'}</span>
         <span class="proc-icon"></span>
-        <span style="font-weight: 500;">${escapeHtml(p.name)}</span>
+        <span style="font-weight: 600;">${escapeHtml(g.name)}</span>
+        ${hasMultiple ? `<span class="proc-count-badge">${g.count}</span>` : ''}
       </td>
-      <td class="font-mono ${p.cpu > 15 ? 'text-amber' : ''}">${p.cpu.toFixed(1)}%</td>
-      <td class="font-mono">${p.mem > 1024 ? (p.mem / 1024).toFixed(2) + ' GB' : p.mem + ' MB'}</td>
-      <td class="font-mono">${escapeHtml(p.io)}</td>
-      <td><span class="status-badge ${p.status === 'running' ? 'running' : 'sleeping'}">${escapeHtml(p.status)}</span></td>
+      <td class="font-mono">${pidDisplay}</td>
+      <td class="font-mono heat-cell ${cpuClass}">${g.cpu.toFixed(1)}%</td>
+      <td class="font-mono heat-cell ${memClass}">${memFormatted}</td>
+      <td class="font-mono">${escapeHtml(g.io || 'Active')}</td>
+      <td><span class="status-badge ${g.status === 'running' ? 'running' : 'sleeping'}">${escapeHtml(g.status || 'running')}</span></td>
       <td style="text-align: right;">
-        <button class="btn-kill-row" data-pid="${p.pid}" data-name="${escapeHtml(p.name)}" title="Stop process ${escapeHtml(p.name)} (PID: ${p.pid})">
-          <span>⏹ Stop</span>
-        </button>
+        ${hasMultiple 
+          ? `<button class="btn-kill-row btn-kill-group" data-name="${escapeHtml(g.name)}" title="Stop all ${g.count} instances of ${escapeHtml(g.name)}"><span>⏹ End Task</span></button>`
+          : `<button class="btn-kill-row" data-pid="${g.instances && g.instances[0] ? g.instances[0].pid : ''}" data-name="${escapeHtml(g.name)}" title="Stop process ${escapeHtml(g.name)}"><span>⏹ Stop</span></button>`
+        }
       </td>
     `;
     tbody.appendChild(tr);
+
+    // Expandable child rows
+    if (hasMultiple && isExpanded && g.instances) {
+      g.instances.forEach((inst, idx) => {
+        const childTr = document.createElement('tr');
+        childTr.className = 'proc-child-row';
+
+        const instMem = inst.mem >= 1024 
+          ? `${(inst.mem / 1024).toFixed(1)} GB` 
+          : `${inst.mem.toFixed(1)} MB`;
+
+        const instCpuClass = inst.cpu > 15 ? 'heat-cpu-high' : (inst.cpu > 0 ? 'heat-cpu-active' : '');
+
+        childTr.innerHTML = `
+          <td class="proc-child-cell">
+            <span class="proc-child-branch">└─</span>
+            <span>${escapeHtml(inst.name)}</span>
+            <span style="color: var(--text-dim); font-size: 0.72rem; margin-left: 6px;">(#${idx + 1})</span>
+          </td>
+          <td class="font-mono font-bold" style="color: var(--cyan);">${inst.pid}</td>
+          <td class="font-mono heat-cell ${instCpuClass}">${inst.cpu.toFixed(1)}%</td>
+          <td class="font-mono">${instMem}</td>
+          <td class="font-mono" style="color: var(--text-dim);">${escapeHtml(inst.io || 'Active')}</td>
+          <td><span class="status-badge running" style="font-size: 0.68rem; padding: 2px 6px;">running</span></td>
+          <td style="text-align: right;">
+            <button class="btn-kill-row" data-pid="${inst.pid}" data-name="${escapeHtml(inst.name)}" title="Stop process (PID: ${inst.pid})">
+              <span>⏹ Stop</span>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(childTr);
+      });
+    }
   });
 }
 
@@ -577,6 +672,9 @@ async function pollRealFleet() {
 
       if (data.processes) {
         node.processes = data.processes;
+      }
+      if (data.process_groups) {
+        node.processGroups = data.process_groups;
       }
 
     } catch (err) {
@@ -732,16 +830,41 @@ function setupEvents() {
     });
   }
 
-  // Process Table Stop Button Event Delegation
+  // Process Table Interaction Event Delegation (Expand/Collapse & Stop/End Task)
   const procTbody = document.getElementById('proc-table-body');
   if (procTbody) {
     procTbody.addEventListener('click', (e) => {
-      const btn = e.target.closest('.btn-kill-row');
-      if (!btn) return;
-      const pid = btn.dataset.pid;
-      const name = btn.dataset.name;
-      if (confirm(`Are you sure you want to STOP process [${name}] (PID: ${pid})?`)) {
-        requestStopProcess(pid, true);
+      // 1. Check if user clicked a kill button
+      const killBtn = e.target.closest('.btn-kill-row');
+      if (killBtn) {
+        e.stopPropagation();
+        const isGroup = killBtn.classList.contains('btn-kill-group');
+        const name = killBtn.dataset.name;
+        const pid = killBtn.dataset.pid;
+        if (isGroup) {
+          if (confirm(`Are you sure you want to STOP ALL running instances of [${name}]?`)) {
+            requestStopProcess(name, false);
+          }
+        } else {
+          if (confirm(`Are you sure you want to STOP process [${name}] (PID: ${pid})?`)) {
+            requestStopProcess(pid, true);
+          }
+        }
+        return;
+      }
+
+      // 2. Check if user clicked a group row or chevron to expand/collapse
+      const groupRow = e.target.closest('.proc-group-row');
+      if (groupRow) {
+        const groupKey = groupRow.dataset.group;
+        if (groupKey) {
+          if (state.expandedGroups.has(groupKey)) {
+            state.expandedGroups.delete(groupKey);
+          } else {
+            state.expandedGroups.add(groupKey);
+          }
+          renderProcesses();
+        }
       }
     });
   }

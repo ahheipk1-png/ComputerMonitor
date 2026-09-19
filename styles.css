@@ -1390,6 +1390,121 @@ body {
   font-weight: bold;
 }
 
+/* Sticky Header & Scrollable Process Table */
+.table-responsive {
+  max-height: 620px;
+  overflow-y: auto;
+  position: relative;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.proc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-card);
+  box-shadow: 0 1px 0 var(--border-color);
+}
+
+/* Process Group & Child Rows */
+.proc-group-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.proc-group-row:hover {
+  background-color: var(--bg-surface);
+}
+
+.proc-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.proc-group-row:hover .proc-chevron {
+  color: var(--cyan);
+}
+
+.proc-count-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* Child Instance Rows */
+.proc-child-row {
+  background-color: rgba(0, 0, 0, 0.02);
+  font-size: 0.82rem;
+}
+
+[data-theme="dark"] .proc-child-row {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.proc-child-row:hover {
+  background-color: var(--bg-surface);
+}
+
+.proc-child-cell {
+  padding-left: 32px !important;
+  color: var(--text-muted);
+}
+
+.proc-child-branch {
+  color: var(--text-dim);
+  margin-right: 6px;
+  font-family: monospace;
+}
+
+/* Task Manager Heatmap Tints */
+.heat-cell {
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.heat-cpu-active {
+  background-color: rgba(168, 85, 247, 0.12) !important;
+  color: var(--purple) !important;
+  font-weight: 600;
+}
+
+.heat-cpu-high {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  color: var(--rose) !important;
+  font-weight: 700;
+}
+
+.heat-mem-low {
+  background-color: rgba(168, 85, 247, 0.06) !important;
+}
+
+.heat-mem-med {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+  color: var(--purple) !important;
+  font-weight: 600;
+}
+
+.heat-mem-high {
+  background-color: rgba(168, 85, 247, 0.25) !important;
+  color: #a855f7 !important;
+  font-weight: 700;
+}
+
 /* Process Table Kill Button & Controls */
 .btn-kill-row {
   display: inline-flex;
