@@ -523,11 +523,21 @@ function simulateFleet() {
 
   renderProcesses();
 
-  // Draw Charts for active node
-  drawSparkline(canvases.cpu, active.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
-  drawSparkline(canvases.ram, active.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
-  drawSparkline(canvases.disk, active.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
-  drawSparkline(canvases.net, active.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
+  // Draw Charts for active node (theme-aware colors)
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const cyan = isDark ? '#38bdf8' : '#0284c7';
+  const cyanGlow = isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.18)';
+  const purple = isDark ? '#a78bfa' : '#7c3aed';
+  const purpleGlow = isDark ? 'rgba(167, 139, 250, 0.25)' : 'rgba(124, 58, 237, 0.18)';
+  const amber = isDark ? '#fbbf24' : '#d97706';
+  const amberGlow = isDark ? 'rgba(251, 191, 36, 0.25)' : 'rgba(217, 119, 6, 0.18)';
+  const emerald = isDark ? '#34d399' : '#059669';
+  const emeraldGlow = isDark ? 'rgba(52, 211, 153, 0.25)' : 'rgba(5, 150, 105, 0.18)';
+
+  drawSparkline(canvases.cpu, active.history.cpu, cyan, cyanGlow);
+  drawSparkline(canvases.ram, active.history.ram, purple, purpleGlow);
+  drawSparkline(canvases.disk, active.history.disk, amber, amberGlow);
+  drawSparkline(canvases.net, active.history.net, emerald, emeraldGlow);
 }
 
 // Live Local Agent Fetcher
@@ -570,8 +580,41 @@ function loop() {
   }
 }
 
+// Theme Manager
+function initTheme() {
+  const savedTheme = localStorage.getItem('cm_theme') || 'light';
+  applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+  const btnIcon = document.getElementById('theme-toggle-icon');
+  const btnText = document.getElementById('theme-toggle-text');
+  
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    if (btnIcon) btnIcon.textContent = '☀️';
+    if (btnText) btnText.textContent = 'Light Mode';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    if (btnIcon) btnIcon.textContent = '🌙';
+    if (btnText) btnText.textContent = 'Dark Mode';
+  }
+  localStorage.setItem('cm_theme', theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+}
+
 // UI Event Listeners & Modals
 function setupEvents() {
+  const btnThemeToggle = document.getElementById('btn-theme-toggle');
+  if (btnThemeToggle) {
+    btnThemeToggle.addEventListener('click', toggleTheme);
+  }
+
   const btnDetailed = document.getElementById('btn-view-detailed');
   const btnFleet = document.getElementById('btn-view-fleet');
   const btnSim = document.getElementById('btn-mode-sim');
@@ -689,6 +732,7 @@ function setupEvents() {
 
 // App Entry Point
 window.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   initCores();
   setupEvents();
   renderFleetBar();
