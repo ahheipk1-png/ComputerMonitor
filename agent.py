@@ -59,6 +59,26 @@ def get_local_ip():
     return ip
 
 
+import subprocess
+
+def check_task_scheduler():
+    if sys.platform != 'win32':
+        return {"installed": True, "status": "Non-Windows OS"}
+    try:
+        creationflags = 0x08000000 # CREATE_NO_WINDOW
+        out = subprocess.run(['schtasks', '/query', '/tn', 'ComputerMonitorAgent', '/fo', 'list'],
+                             capture_output=True, text=True, timeout=2, creationflags=creationflags)
+        if out.returncode == 0:
+            status = "Ready / Running"
+            for line in out.stdout.splitlines():
+                if "Status:" in line:
+                    status = line.split(":", 1)[1].strip()
+            return {"installed": True, "status": status}
+        return {"installed": False, "status": "Task Not Found / Deleted"}
+    except Exception:
+        return {"installed": False, "status": "Unavailable"}
+
+
 def background_metrics_collector():
     """Runs in background thread to keep LATEST_METRICS updated without slowing down HTTP responses."""
     global LATEST_METRICS
@@ -68,6 +88,7 @@ def background_metrics_collector():
                 'hostname': platform.node(),
                 'os': f"{platform.system()} {platform.release()}",
                 'arch': platform.machine(),
+                'task_scheduler': check_task_scheduler(),
             }
 
             if HAS_PSUTIL:

@@ -82,6 +82,16 @@
 
     <!-- Detailed Single-Computer Telemetry Grid -->
     <div id="detailed-telemetry-container">
+      <!-- Security / Offline Alert Banner (shown when agent is stopped or task is missing) -->
+      <div class="agent-alert-banner" id="agent-alert-banner" style="display: none;">
+        <div class="alert-icon">🚨</div>
+        <div class="alert-content">
+          <strong id="alert-title">AGENT UNREACHABLE / TASK STOPPED</strong>
+          <span id="alert-desc">The background telemetry agent is offline. The Windows Task Scheduler task was stopped or deleted.</span>
+        </div>
+        <div class="alert-meta font-mono" id="alert-last-seen">Last Seen: Never</div>
+      </div>
+
       <!-- Active Node System Meta -->
       <div class="active-node-banner">
         <div class="active-node-info">
@@ -93,6 +103,10 @@
           <div class="meta-pill">
             <span class="meta-label">STATUS</span>
             <span class="meta-val text-emerald" id="meta-status">ONLINE</span>
+          </div>
+          <div class="meta-pill">
+            <span class="meta-label">TASK SCHEDULER</span>
+            <span class="meta-val text-emerald" id="meta-scheduler">ACTIVE</span>
           </div>
           <div class="meta-pill">
             <span class="meta-label">UPTIME</span>

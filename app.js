@@ -192,6 +192,42 @@ function updateActiveNodeBanner() {
   document.getElementById('meta-ping').textContent = isOnline ? `${node.ping} ms` : '--';
   document.getElementById('cpu-name').textContent = node.cpuModel;
   document.getElementById('proc-node-tag').textContent = node.name;
+
+  // Task Scheduler Status & Alert Banner Logic
+  const alertBanner = document.getElementById('agent-alert-banner');
+  const alertTitle = document.getElementById('alert-title');
+  const alertDesc = document.getElementById('alert-desc');
+  const alertLastSeen = document.getElementById('alert-last-seen');
+  const metaScheduler = document.getElementById('meta-scheduler');
+
+  if (!isOnline) {
+    if (alertBanner) alertBanner.style.display = 'flex';
+    if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
+    if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
+    if (alertLastSeen) alertLastSeen.textContent = node.lastSeen ? `Last Active: ${node.lastSeen.toLocaleTimeString()}` : 'Last Active: Never';
+    if (metaScheduler) {
+      metaScheduler.textContent = 'STOPPED / UNREACHABLE';
+      metaScheduler.className = 'meta-val text-rose';
+    }
+  } else {
+    const sched = node.taskScheduler;
+    if (sched && !sched.installed) {
+      if (alertBanner) alertBanner.style.display = 'flex';
+      if (alertTitle) alertTitle.textContent = 'TASK SCHEDULER TASK DELETED';
+      if (alertDesc) alertDesc.textContent = `Warning: The Windows Scheduled Task 'ComputerMonitorAgent' was deleted on ${node.name}. Run install-startup-task.bat to restore it.`;
+      if (alertLastSeen) alertLastSeen.textContent = 'Warning Alert';
+      if (metaScheduler) {
+        metaScheduler.textContent = 'TASK DELETED';
+        metaScheduler.className = 'meta-val text-rose';
+      }
+    } else {
+      if (alertBanner) alertBanner.style.display = 'none';
+      if (metaScheduler) {
+        metaScheduler.textContent = sched ? `ACTIVE (${sched.status})` : 'ACTIVE (Running)';
+        metaScheduler.className = 'meta-val text-emerald';
+      }
+    }
+  }
 }
 
 function switchViewMode(mode) {
@@ -400,7 +436,9 @@ async function pollRealFleet() {
       const pingMs = Math.round(performance.now() - startTime);
 
       node.status = 'online';
+      node.lastSeen = new Date();
       node.ping = pingMs;
+      if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
 
       if (data.hostname) node.name = data.hostname;
       if (data.os) {
