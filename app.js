@@ -34,6 +34,13 @@ const DEFAULT_NODES = [
   }
 ];
 
+// Fleet Identifier Resolution
+const urlParams = new URLSearchParams(window.location.search);
+let fleetId = urlParams.get('fleet') || localStorage.getItem('cm_fleet_id') || 'ahheipk1';
+localStorage.setItem('cm_fleet_id', fleetId);
+
+let mqttFleetClient = null;
+
 // App State
 const state = {
   nodes: JSON.parse(localStorage.getItem('cm_real_nodes_v1')) || DEFAULT_NODES,
@@ -59,6 +66,184 @@ function getActiveNode() {
 
 function saveNodes() {
   localStorage.setItem('cm_real_nodes_v1', JSON.stringify(state.nodes));
+}
+
+// Cloud Fleet Telemetry Ingestion (Zero-IP Automatic Sync)
+function handleIncomingNodeTelemetry(data) {
+  if (!data || !data.hostname) return;
+  const hostname = data.hostname;
+  const nodeId = `node-${hostname.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+  let node = state.nodes.find(n => n.id === nodeId || n.name.toLowerCase() === hostname.toLowerCase());
+
+  if (!node) {
+    let icon = '💻';
+    if (data.os && data.os.includes('Windows')) icon = '🪟';
+    else if (data.os && (data.os.includes('Mac') || data.os.includes('Darwin'))) icon = '🍎';
+    else if (data.os && data.os.includes('Linux')) icon = '🐧';
+
+    node = {
+      id: nodeId,
+      name: hostname,
+      os: data.os || 'Windows',
+      osIcon: icon,
+      cpuModel: data.cpu_model || (data.cpu_count ? `${data.cpu_count}-Core CPU` : 'Hardware Telemetry'),
+      ramTotal: data.ram ? data.ram.total_gb : 0,
+      endpoint: 'cloud-sync',
+      status: 'online',
+      ip: data.ip || 'Cloud Synced',
+      uptime: data.uptime || 0,
+      cpu: 0,
+      ram: 0,
+      disk: 0,
+      temp: '--',
+      ping: 15,
+      cores: [],
+      history: {
+        cpu: new Array(30).fill(0),
+        ram: new Array(30).fill(0),
+        disk: new Array(30).fill(0),
+        net: new Array(30).fill(0),
+      },
+      processes: [],
+      lastSeen: new Date()
+    };
+
+    // If only the offline default placeholder exists, replace it
+    const hasOnlyPlaceholder = state.nodes.length === 1 && state.nodes[0].id === 'node-local' && state.nodes[0].status === 'offline';
+    if (hasOnlyPlaceholder) {
+      state.nodes = [node];
+      state.selectedNodeId = node.id;
+    } else {
+      state.nodes.push(node);
+    }
+    saveNodes();
+    showToast(`⚡ Computer Connected to Fleet: [${hostname}]`);
+  }
+
+  // Update telemetry metrics
+  node.status = 'online';
+  node.lastSeen = new Date();
+  if (data.ip) node.ip = data.ip;
+  if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
+  if (data.os) {
+    node.os = data.os;
+    if (data.os.includes('Windows')) node.osIcon = '🪟';
+    else if (data.os.includes('Mac') || data.os.includes('Darwin')) node.osIcon = '🍎';
+    else if (data.os.includes('Linux')) node.osIcon = '🐧';
+  }
+  if (data.cpu !== undefined) {
+    node.cpu = Math.round(data.cpu);
+    node.history.cpu.shift();
+    node.history.cpu.push(node.cpu);
+  }
+  if (data.cores) node.cores = data.cores;
+  if (data.cpu_count) node.cpuCount = data.cpu_count;
+  if (data.cpu_freq) node.cpuFreq = data.cpu_freq;
+  if (data.uptime !== undefined) node.uptime = data.uptime;
+  if (data.ram) {
+    node.ram = Math.round(data.ram.percent);
+    node.ramTotal = data.ram.total_gb;
+    node.ramData = data.ram;
+    node.history.ram.shift();
+    node.history.ram.push(node.ram);
+  }
+  if (data.disk) {
+    node.disk = Math.round(data.disk.percent);
+    node.diskData = data.disk;
+    node.history.disk.shift();
+    node.history.disk.push(node.disk);
+  }
+  if (data.processes) node.processes = data.processes;
+  if (data.process_groups) node.processGroups = data.process_groups;
+
+  // Refresh UI
+  renderFleetBar();
+  const active = getActiveNode();
+  if (active.id === node.id) {
+    const statusEl = document.getElementById('connection-status');
+    const statusTxt = document.getElementById('status-text');
+    if (statusEl && statusTxt) {
+      statusEl.className = 'connection-status online';
+      statusTxt.textContent = `${active.name} (Live)`;
+    }
+    updateActiveNodeBanner();
+    if (state.viewMode !== 'fleet') {
+      updateDetailedView();
+    }
+  }
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+  }
+}
+
+// Initialize MQTT Cloud Fleet Connection
+function initMqttFleet() {
+  const brokers = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt'
+  ];
+  let brokerIdx = 0;
+
+  function tryConnect() {
+    if (typeof mqtt === 'undefined') {
+      console.warn('MQTT.js library not ready; retrying...');
+      setTimeout(tryConnect, 1000);
+      return;
+    }
+    const broker = brokers[brokerIdx % brokers.length];
+    console.log(`Connecting to Fleet Broker: ${broker} for Fleet [${fleetId}]`);
+
+    try {
+      mqttFleetClient = mqtt.connect(broker, {
+        clientId: 'cm_web_' + Math.random().toString(16).substring(2, 10),
+        clean: true,
+        connectTimeout: 8000,
+        reconnectPeriod: 3000,
+        keepalive: 45
+      });
+
+      mqttFleetClient.on('connect', () => {
+        console.log(`Connected to Fleet Cloud Broker! Fleet ID: ${fleetId}`);
+        const syncBadge = document.getElementById('fleet-sync-badge');
+        const fleetDisplay = document.getElementById('fleet-id-display');
+        if (fleetDisplay) fleetDisplay.textContent = fleetId;
+        if (syncBadge) {
+          syncBadge.style.color = 'var(--emerald)';
+          syncBadge.innerHTML = `Fleet: <strong>${fleetId}</strong> 🟢`;
+        }
+
+        const subTopic = `computermonitor/fleet/${fleetId}/+`;
+        mqttFleetClient.subscribe(subTopic, (err) => {
+          if (err) console.error('Subscription error:', err);
+          else console.log(`Subscribed to ${subTopic}`);
+        });
+      });
+
+      mqttFleetClient.on('message', (topic, message) => {
+        if (topic.endsWith('/cmd')) return;
+        try {
+          const data = JSON.parse(message.toString());
+          handleIncomingNodeTelemetry(data);
+        } catch (err) {
+          console.warn('Error parsing incoming telemetry JSON:', err);
+        }
+      });
+
+      mqttFleetClient.on('error', (err) => {
+        console.warn('MQTT Error:', err);
+        const syncBadge = document.getElementById('fleet-sync-badge');
+        if (syncBadge) {
+          syncBadge.style.color = 'var(--amber)';
+          syncBadge.innerHTML = `Fleet: <strong>${fleetId}</strong> 🟡`;
+        }
+      });
+    } catch (e) {
+      console.error('MQTT setup failed:', e);
+    }
+  }
+
+  tryConnect();
 }
 
 // Render Connected Fleet Bar
@@ -370,30 +555,39 @@ async function requestStopProcess(identifier, isPid = true) {
     return;
   }
 
-  const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
-  const killUrl = `${baseUrl}/kill`;
-  const payload = isPid ? { pid: parseInt(identifier, 10) } : { name: identifier.trim() };
+  // 1. Dispatch over MQTT Cloud Fleet channel
+  if (mqttFleetClient && mqttFleetClient.connected) {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
+    mqttFleetClient.publish(cmdTopic, JSON.stringify({
+      action: 'kill',
+      identifier: identifier,
+      isPid: isPid
+    }));
+    showToast(`Stopping process [${identifier}] on [${node.name}]...`);
+  }
 
-  try {
-    const res = await fetch(killUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(4500)
-    });
+  // 2. Direct HTTP fallback if endpoint is HTTP
+  if (node.endpoint && node.endpoint.startsWith('http')) {
+    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+    const killUrl = `${baseUrl}/kill`;
+    const payload = isPid ? { pid: parseInt(identifier, 10) } : { name: identifier.trim() };
 
-    const data = await res.json();
-    if (res.ok && data.success) {
-      showToast(data.message || 'Process stopped successfully!');
-      // Trigger instant poll to update process list immediately
-      pollRealFleet();
-    } else {
-      showToast(data.error || 'Failed to stop process.', true);
-    }
-  } catch (err) {
-    showToast(`Error communicating with agent: ${err.message}`, true);
+    try {
+      const res = await fetch(killUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(4500)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || 'Process stopped successfully!');
+        pollRealFleet();
+      }
+    } catch (_) {}
   }
 }
 
@@ -425,33 +619,42 @@ async function executeRestartComputer() {
   const node = state.nodes.find(n => n.id === pendingRestartNodeId) || getActiveNode();
   closeRestartModal();
 
-  const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
-  const restartUrl = `${baseUrl}/restart`;
+  // 1. Dispatch over MQTT Cloud Fleet channel
+  if (mqttFleetClient && mqttFleetClient.connected) {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
+    mqttFleetClient.publish(cmdTopic, JSON.stringify({
+      action: 'restart',
+      delay: 5
+    }));
+    showToast(`🔄 Reboot signal dispatched to [${node.name}]...`);
+    const alertBanner = document.getElementById('agent-alert-banner');
+    const alertTitle = document.getElementById('alert-title');
+    const alertDesc = document.getElementById('alert-desc');
+    if (alertBanner) alertBanner.style.display = 'flex';
+    if (alertTitle) alertTitle.textContent = 'SYSTEM REBOOT IN PROGRESS';
+    if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${node.name}. Machine will reboot and automatically reconnect once startup completes.`;
+  }
 
-  try {
-    const res = await fetch(restartUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ delay: 5 }),
-      signal: AbortSignal.timeout(6000)
-    });
+  // 2. Direct HTTP fallback if endpoint is HTTP
+  if (node.endpoint && node.endpoint.startsWith('http')) {
+    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+    const restartUrl = `${baseUrl}/restart`;
 
-    const data = await res.json();
-    if (res.ok && data.success) {
-      showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
-      const alertBanner = document.getElementById('agent-alert-banner');
-      const alertTitle = document.getElementById('alert-title');
-      const alertDesc = document.getElementById('alert-desc');
-      if (alertBanner) alertBanner.style.display = 'flex';
-      if (alertTitle) alertTitle.textContent = 'SYSTEM REBOOT IN PROGRESS';
-      if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${node.name}. Machine will reboot and automatically reconnect once startup completes.`;
-    } else {
-      showToast(data.error || 'Failed to initiate system restart.', true);
-    }
-  } catch (err) {
-    showToast(`Error sending restart command: ${err.message}`, true);
+    try {
+      const res = await fetch(restartUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ delay: 5 }),
+        signal: AbortSignal.timeout(6000)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
+      }
+    } catch (_) {}
   }
 }
 
@@ -746,6 +949,15 @@ function updateDetailedView() {
 // Poll Real Hardware Agent across all nodes
 async function pollRealFleet() {
   for (const node of state.nodes) {
+    if (node.endpoint === 'cloud-sync') {
+      if (node.lastSeen && (new Date() - node.lastSeen > 6500)) {
+        node.status = 'offline';
+        node.history.cpu.shift();
+        node.history.cpu.push(0);
+      }
+      continue;
+    }
+
     const startTime = performance.now();
     try {
       const res = await fetch(node.endpoint, {
@@ -1124,9 +1336,22 @@ function setupEvents() {
     btn.innerHTML = anyCollapsed ? '<span>⊞ Expand All Cards</span>' : '<span>⊟ Collapse All Cards</span>';
   }
 
+  const fleetBadge = document.getElementById('fleet-sync-badge');
+  if (fleetBadge) {
+    fleetBadge.addEventListener('click', () => {
+      const newId = prompt('Your Fleet Sync Code connects all your computers together.\nEnter a Fleet ID:', fleetId);
+      if (newId && newId.trim() && newId.trim() !== fleetId) {
+        localStorage.setItem('cm_fleet_id', newId.trim());
+        window.location.search = `?fleet=${encodeURIComponent(newId.trim())}`;
+      }
+    });
+  }
+
   window.addEventListener('resize', () => {
     updateDetailedView();
   });
+}
+
 // Check URL parameters for instant node auto-connection (e.g. ?ip=192.168.10.117)
 function checkUrlAutoConnect() {
   try {
@@ -1192,6 +1417,9 @@ window.addEventListener('DOMContentLoaded', () => {
   renderFleetBar();
   updateActiveNodeBanner();
   updateDetailedView();
+
+  // Initialize Global Zero-IP Fleet Cloud Stream
+  initMqttFleet();
 
   // Initial poll and recurring loop
   pollRealFleet();

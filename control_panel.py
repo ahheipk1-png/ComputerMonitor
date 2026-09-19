@@ -104,6 +104,26 @@ def run_cmd_hidden(cmd_list):
     return subprocess.run(cmd_list, capture_output=True, text=True, creationflags=flags)
 
 
+def get_fleet_id():
+    """Retrieve or initialize persistent fleet identifier."""
+    fleet_file = os.path.join(BASE_DIR, 'fleet_id.txt')
+    if os.path.exists(fleet_file):
+        try:
+            with open(fleet_file, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    default_id = "ahheipk1"
+    try:
+        with open(fleet_file, 'w', encoding='utf-8') as f:
+            f.write(default_id)
+    except Exception:
+        pass
+    return default_id
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -167,15 +187,15 @@ class App(tk.Tk):
         self.lbl_port_status = tk.Label(row3, text="Offline", font=("Segoe UI", 9), fg="#94a3b8", bg="#1e293b")
         self.lbl_port_status.pack(side="left", padx=(18, 0))
 
-        # 4. Local IP for Website
+        # 4. Fleet Network Status
         row4 = tk.Frame(status_box, bg="#1e293b")
         row4.pack(fill="x", pady=4)
-        tk.Label(row4, text="Add to Website:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
-        self.my_url = f"http://{get_local_ip()}:5500"
-        self.lbl_endpoint = tk.Label(row4, text=self.my_url, font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", cursor="hand2")
-        self.lbl_endpoint.pack(side="left", padx=(18, 4))
-        self.lbl_endpoint.bind("<Button-1>", lambda e: self.copy_url_to_clipboard())
-        tk.Label(row4, text="(click to copy)", font=("Segoe UI", 8), fg="#64748b", bg="#1e293b").pack(side="left")
+        tk.Label(row4, text="Fleet Network:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
+        self.fleet_id = get_fleet_id()
+        self.lbl_fleet = tk.Label(row4, text=f"{self.fleet_id} (Cloud Synced)", font=("Segoe UI", 9, "bold"), fg="#10b981", bg="#1e293b", cursor="hand2")
+        self.lbl_fleet.pack(side="left", padx=(18, 4))
+        self.lbl_fleet.bind("<Button-1>", lambda e: self.open_dashboard())
+        tk.Label(row4, text="(auto-linked)", font=("Segoe UI", 8), fg="#64748b", bg="#1e293b").pack(side="left")
 
         # Actions Section
         actions_box = tk.LabelFrame(body_frame, text=" Actions & Controls ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=14, pady=12, bd=1, relief="solid")
@@ -202,7 +222,7 @@ class App(tk.Tk):
         btn_grid.columnconfigure(1, weight=1)
 
         # Open Dashboard Button
-        btn_dash = tk.Button(actions_box, text="🌐 Open Dashboard (Browser)", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=self.open_dashboard)
+        btn_dash = tk.Button(actions_box, text="🌐 Open Fleet Dashboard (Website)", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=self.open_dashboard)
         btn_dash.pack(fill="x", pady=(8, 0))
 
         # Stop Specific Process Section
@@ -336,11 +356,10 @@ class App(tk.Tk):
             pass
 
     def open_dashboard(self):
-        ip = get_local_ip()
-        if self.proc_running:
-            webbrowser.open(f"http://{ip}:5500")
-        else:
-            webbrowser.open(f"{DASHBOARD_URL}/?ip={ip}")
+        fleet = get_fleet_id()
+        url = f"{DASHBOARD_URL}/?fleet={fleet}"
+        self.log(f"Opening fleet dashboard: {url}")
+        webbrowser.open(url)
 
     def start_agent(self):
         if not ensure_agent_exe():
@@ -355,6 +374,7 @@ class App(tk.Tk):
             self.log("Agent process launched silently.")
             time.sleep(0.5)
             self.update_ui_status()
+            threading.Thread(target=lambda: (time.sleep(1.0), self.open_dashboard()), daemon=True).start()
         except Exception as e:
             self.log(f"Error starting agent: {e}")
             messagebox.showerror("Start Error", str(e))
@@ -391,7 +411,8 @@ class App(tk.Tk):
         res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
         if res.returncode == 0:
             self.log("Startup task successfully installed and started!")
-            messagebox.showinfo("Success", "Windows Startup Task successfully registered!\nThe agent will now boot automatically with Windows.")
+            threading.Thread(target=lambda: (time.sleep(1.0), self.open_dashboard()), daemon=True).start()
+            messagebox.showinfo("Success", "Windows Startup Task successfully registered!\nYour computer is now synced to the website.")
         else:
             self.log(f"Installation failed: {res.stderr}")
             messagebox.showerror("Task Scheduler Error", res.stderr or "Failed to install task.")

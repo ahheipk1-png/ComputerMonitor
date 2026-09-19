@@ -58,6 +58,7 @@
             <line x1="6" y1="18" x2="6.01" y2="18"></line>
           </svg>
           <h3>Connected Computers (<span id="fleet-count">3</span>)</h3>
+          <span class="fleet-sync-badge" id="fleet-sync-badge" style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.15); color: var(--emerald); padding: 2px 9px; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: 8px; font-weight: normal; cursor: pointer;" title="Fleet Sync Code (click to change)">Fleet: <strong id="fleet-id-display">ahheipk1</strong> 🟢</span>
         </div>
         <div class="fleet-actions-group" style="display: flex; gap: 8px; flex-wrap: wrap;">
           <a href="ComputerMonitorControl.exe" download class="btn-download-agent" id="btn-download-gui" title="Download Standalone Desktop GUI (No installation needed)">
@@ -538,19 +539,25 @@
         <button class="modal-close" id="add-node-modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="add-node-intro-banner">
-          <div class="intro-banner-icon">📥</div>
+        <div class="add-node-intro-banner" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 14px 16px;">
+          <div class="intro-banner-icon">⚡</div>
           <div class="intro-banner-text">
-            <strong>Need to monitor another computer?</strong>
-            <p>Download and run the Desktop GUI on that computer. It shows that PC's exact URL to connect here!</p>
-            <a href="ComputerMonitorControl.exe" download class="btn-download-inline">📥 Download Desktop GUI (.exe)</a>
+            <strong style="font-size: 1rem; color: var(--cyan);">Add Any Computer in 1 Click (Zero IP Needed)</strong>
+            <p style="margin: 6px 0 12px; font-size: 0.88rem; line-height: 1.45;">
+              1. Download and open the Desktop GUI on that computer.<br>
+              2. Click <b>Start Agent</b> or <b>Install Startup Task</b>.<br>
+              3. That's it! It automatically links to your fleet (<strong>ahheipk1</strong>) and opens this website with that computer already active.
+            </p>
+            <a href="ComputerMonitorControl.exe" download class="btn-download-inline" style="display: inline-block; padding: 10px 18px; font-size: 0.9rem; font-weight: bold;">📥 Download Desktop GUI (.exe)</a>
           </div>
         </div>
 
-        <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted);">
-          Enter the connection details for that machine:
-        </p>
-        <form id="add-node-form" class="modal-form">
+        <details style="margin-top: 16px;">
+          <summary style="font-size: 0.82rem; color: var(--text-muted); cursor: pointer;">Advanced: Add via Manual IP Address</summary>
+          <p style="margin-top: 8px; font-size: 0.82rem; color: var(--text-muted);">
+            If running behind an isolated LAN without internet:
+          </p>
+        <form id="add-node-form" class="modal-form" style="margin-top: 8px;">
           <div class="form-group">
             <label for="node-input-name">Computer Name</label>
             <input type="text" id="node-input-name" placeholder="e.g. Office PC, MacBook, Server" required>
@@ -573,6 +580,7 @@
             <button type="submit" class="btn-primary">Add Computer</button>
           </div>
         </form>
+        </details>
       </div>
     </div>
   </div>
@@ -674,6 +682,7 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
+  <script src="mqtt.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

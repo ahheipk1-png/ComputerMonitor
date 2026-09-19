@@ -8,6 +8,8 @@ Runs on port 5500 with CORS and Private Network Access enabled.
 import http.server
 import json
 import socket
+import struct
+import re
 import platform
 import os
 import sys
@@ -267,6 +269,231 @@ def background_metrics_collector():
         time.sleep(1.0)
 
 
+class PureMqttClient:
+    """Lightweight zero-dependency MQTT 3.1.1 client for streaming hardware telemetry."""
+    def __init__(self, client_id, host='broker.emqx.io', port=1883):
+        self.client_id = client_id
+        self.host = host
+        self.port = port
+        self.sock = None
+        self.connected = False
+
+    def connect(self, timeout=6):
+        try:
+            self.sock = socket.create_connection((self.host, self.port), timeout=timeout)
+            protocol_name = b'MQTT'
+            protocol_level = 4
+            connect_flags = 0x02
+            keep_alive = 60
+            payload = struct.pack('!H', len(self.client_id)) + self.client_id.encode('utf-8')
+            var_header = struct.pack('!H', len(protocol_name)) + protocol_name + struct.pack('!BBH', protocol_level, connect_flags, keep_alive)
+            body = var_header + payload
+            packet = bytes([0x10]) + self._encode_len(len(body)) + body
+            self.sock.sendall(packet)
+            resp = self._recv_exact(4)
+            if len(resp) >= 4 and resp[0] == 0x20 and resp[3] == 0x00:
+                self.connected = True
+                self.sock.settimeout(0.3)
+                return True
+        except Exception:
+            pass
+        self.close()
+        return False
+
+    def subscribe(self, topic, msg_id=1):
+        if not self.connected or not self.sock:
+            return False
+        try:
+            topic_bytes = topic.encode('utf-8')
+            var_header = struct.pack('!H', msg_id)
+            payload = struct.pack('!H', len(topic_bytes)) + topic_bytes + b'\x00'
+            body = var_header + payload
+            packet = bytes([0x82]) + self._encode_len(len(body)) + body
+            self.sock.sendall(packet)
+            resp = self._recv_exact(5)
+            return len(resp) >= 5 and resp[0] == 0x90
+        except Exception:
+            return False
+
+    def publish(self, topic, payload):
+        if not self.connected or not self.sock:
+            return False
+        try:
+            topic_bytes = topic.encode('utf-8')
+            msg_bytes = payload.encode('utf-8') if isinstance(payload, str) else payload
+            var_header = struct.pack('!H', len(topic_bytes)) + topic_bytes
+            body = var_header + msg_bytes
+            packet = bytes([0x30]) + self._encode_len(len(body)) + body
+            self.sock.sendall(packet)
+            return True
+        except Exception:
+            self.close()
+            return False
+
+    def check_incoming(self):
+        if not self.connected or not self.sock:
+            return None
+        try:
+            header = self.sock.recv(1)
+            if not header:
+                return None
+            pkt_type = header[0] >> 4
+            multiplier = 1
+            rem_len = 0
+            while True:
+                b = self.sock.recv(1)[0]
+                rem_len += (b & 0x7F) * multiplier
+                multiplier *= 128
+                if (b & 0x80) == 0:
+                    break
+            data = self._recv_exact(rem_len)
+            if pkt_type == 3:
+                topic_len = struct.unpack('!H', data[:2])[0]
+                topic = data[2:2+topic_len].decode('utf-8', errors='ignore')
+                msg = data[2+topic_len:]
+                return (topic, msg)
+        except (socket.timeout, BlockingIOError):
+            pass
+        except Exception:
+            self.close()
+        return None
+
+    def _encode_len(self, length):
+        encoded = bytearray()
+        while True:
+            byte = length % 128
+            length //= 128
+            if length > 0:
+                byte |= 0x80
+            encoded.append(byte)
+            if length == 0:
+                break
+        return bytes(encoded)
+
+    def _recv_exact(self, n):
+        data = bytearray()
+        while len(data) < n:
+            chunk = self.sock.recv(n - len(data))
+            if not chunk:
+                break
+            data.extend(chunk)
+        return bytes(data)
+
+    def close(self):
+        self.connected = False
+        if self.sock:
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+
+
+def get_fleet_id():
+    """Retrieve or initialize persistent fleet identifier."""
+    fleet_file = os.path.join(BASE_DIR, 'fleet_id.txt')
+    if os.path.exists(fleet_file):
+        try:
+            with open(fleet_file, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    default_id = "ahheipk1"
+    try:
+        with open(fleet_file, 'w', encoding='utf-8') as f:
+            f.write(default_id)
+    except Exception:
+        pass
+    return default_id
+
+
+def handle_remote_command(msg_bytes):
+    """Execute remote command received via secure fleet MQTT channel."""
+    try:
+        data = json.loads(msg_bytes.decode('utf-8'))
+        action = data.get('action')
+        if action == 'restart':
+            delay = int(data.get('delay', 5))
+            creationflags = 0x08000000 if sys.platform == 'win32' else 0
+            if platform.system() == 'Windows':
+                subprocess.Popen(['shutdown', '/r', '/t', str(delay)], creationflags=creationflags)
+            else:
+                subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
+        elif action == 'kill':
+            val = str(data.get('val') or data.get('identifier') or data.get('name') or data.get('pid') or '').strip()
+            is_pid = data.get('isPid', False)
+            if not val or not HAS_PSUTIL:
+                return
+            if is_pid or val.isdigit():
+                pid = int(val)
+                p = psutil.Process(pid)
+                p.terminate()
+            else:
+                for p in psutil.process_iter(['name']):
+                    try:
+                        if p.info['name'].lower() == val.lower():
+                            p.terminate()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+    except Exception:
+        pass
+
+
+def mqtt_fleet_worker():
+    """Background worker that continuously streams telemetry to the global fleet channel."""
+    fleet_id = get_fleet_id()
+    hostname = platform.node()
+    machine_id = re.sub(r'[^a-zA-Z0-9_-]', '', hostname).lower() or "pc"
+    pub_topic = f"computermonitor/fleet/{fleet_id}/{hostname}"
+    cmd_topic = f"computermonitor/fleet/{fleet_id}/{hostname}/cmd"
+    brokers = ['broker.emqx.io', 'broker.hivemq.com']
+    broker_idx = 0
+
+    while True:
+        broker = brokers[broker_idx % len(brokers)]
+        client_id = f"cm_agent_{machine_id}_{int(time.time())}"
+        client = PureMqttClient(client_id, host=broker, port=1883)
+        if not client.connect(timeout=6):
+            broker_idx += 1
+            time.sleep(4)
+            continue
+
+        client.subscribe(cmd_topic)
+
+        while client.connected:
+            try:
+                # Check for incoming commands
+                inc = client.check_incoming()
+                if inc:
+                    topic, msg = inc
+                    if topic == cmd_topic:
+                        handle_remote_command(msg)
+
+                # Publish telemetry
+                with METRICS_LOCK:
+                    payload = json.dumps(LATEST_METRICS)
+
+                if not client.publish(pub_topic, payload):
+                    break
+
+                for _ in range(15):
+                    time.sleep(0.1)
+                    inc = client.check_incoming()
+                    if inc:
+                        topic, msg = inc
+                        if topic == cmd_topic:
+                            handle_remote_command(msg)
+
+            except Exception:
+                break
+
+        client.close()
+        broker_idx += 1
+        time.sleep(3)
+
+
 class MetricsHandler(http.server.BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -510,6 +737,9 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         elif clean_path == '/app.js':
             fname = 'app.js'
             ctype = 'application/javascript; charset=utf-8'
+        elif clean_path == '/mqtt.min.js':
+            fname = 'mqtt.min.js'
+            ctype = 'application/javascript; charset=utf-8'
         elif clean_path == '/ComputerMonitorControl.exe':
             fname = 'ComputerMonitorControl.exe'
             ctype = 'application/octet-stream'
@@ -559,17 +789,20 @@ class QuietThreadingHTTPServer(http.server.ThreadingHTTPServer):
 
 def auto_open_browser():
     time.sleep(1.2)
-    url = "https://computermonitor.pages.dev"
+    fleet = get_fleet_id()
+    url = f"https://computermonitor.pages.dev/?fleet={fleet}"
     print(f"[*] Launching live dashboard in your browser: {url}")
     webbrowser.open(url)
 
 
 def main():
     lan_ip = get_local_ip()
+    fleet = get_fleet_id()
     print("=" * 65)
     print(" [COMPUTER MONITOR] Real-Time Hardware Agent")
     print("=" * 65)
     print(f"[*] Computer Name : {platform.node()}")
+    print(f"[*] Fleet Network : {fleet} (Cloud Synced)")
     print(f"[*] Platform      : {platform.system()} {platform.release()} ({platform.machine()})")
     print(f"[*] Localhost URL : http://localhost:{PORT}/metrics")
     print(f"[*] LAN Network IP: http://{lan_ip}:{PORT}/metrics")
@@ -581,6 +814,10 @@ def main():
     # Start background metric collector
     collector = threading.Thread(target=background_metrics_collector, daemon=True)
     collector.start()
+
+    # Start background MQTT cloud fleet streamer
+    mqtt_streamer = threading.Thread(target=mqtt_fleet_worker, daemon=True)
+    mqtt_streamer.start()
 
     # Automatically open the web dashboard in browser (unless --background or --no-browser flag is passed)
     if '--background' not in sys.argv and '--no-browser' not in sys.argv:
