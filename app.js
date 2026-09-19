@@ -738,7 +738,21 @@ window.addEventListener('DOMContentLoaded', () => {
   renderFleetBar();
   updateActiveNodeBanner();
   renderProcesses();
-  loop();
 
+  // Check URL parameter for auto-linking: e.g. ?mode=agent
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') === 'agent' || window.location.hash === '#agent') {
+    const btnAgent = document.getElementById('btn-mode-agent');
+    const btnSim = document.getElementById('btn-mode-sim');
+    if (btnAgent && btnSim) {
+      state.mode = 'agent';
+      btnAgent.classList.add('active');
+      btnSim.classList.remove('active');
+      document.getElementById('status-text').textContent = 'Connecting agent...';
+      fetchLocalAgentMetrics();
+    }
+  }
+
+  loop();
   setInterval(loop, 1200);
 });

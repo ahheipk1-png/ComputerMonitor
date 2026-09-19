@@ -125,11 +125,22 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
 
 
 import sys
+import webbrowser
+import threading
+import time
+
 if hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
+
+
+def auto_open_browser():
+    time.sleep(1.2)
+    url = "https://computermonitor.pages.dev?mode=agent"
+    print(f"[*] Launching live dashboard in your browser: {url}")
+    webbrowser.open(url)
 
 
 def main():
@@ -147,6 +158,9 @@ def main():
     print(f"    2. Click '+ Add Computer' and paste: http://{lan_ip}:{PORT}/metrics")
     print("    Press Ctrl+C to stop.")
     print("=" * 65)
+
+    # Automatically open the live web dashboard in browser
+    threading.Thread(target=auto_open_browser, daemon=True).start()
 
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), MetricsHandler) as httpd:
