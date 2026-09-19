@@ -709,7 +709,7 @@ body {
   flex-direction: column;
   gap: 16px;
   box-shadow: var(--shadow-card);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, padding 0.25s ease;
 }
 
 .card:hover {
@@ -721,6 +721,82 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Collapsible Metric Card styles */
+.metric-card .card-header {
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-md);
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background 0.15s ease;
+}
+
+.metric-card .card-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-summary-pill {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  letter-spacing: 0.02em;
+}
+
+.card-chevron {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+  margin-left: 2px;
+}
+
+.metric-card.collapsed {
+  padding: 14px 18px;
+  gap: 0;
+}
+
+.metric-card.collapsed .card-body {
+  display: none !important;
+}
+
+.metric-card.collapsed .card-chevron {
+  transform: rotate(-90deg);
+}
+
+.btn-toggle-metrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(2, 132, 199, 0.1);
+  border: 1px solid var(--border-glow);
+  color: var(--cyan);
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.btn-toggle-metrics:hover {
+  background: var(--cyan);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.35);
+  transform: translateY(-1px);
 }
 
 .card-title {

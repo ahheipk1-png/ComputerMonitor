@@ -675,6 +675,38 @@ function updateDetailedView() {
     document.getElementById('drive-c-bar').style.width = '0%';
   }
 
+  // Update Header Summary Pills for collapsed card view
+  const cpuSummary = document.getElementById('cpu-header-summary');
+  if (cpuSummary) cpuSummary.textContent = isOnline ? `${active.cpu}% LOAD` : 'OFFLINE';
+
+  const ramSummary = document.getElementById('ram-header-summary');
+  if (ramSummary) {
+    ramSummary.textContent = isOnline 
+      ? (active.ramData ? `${active.ram}% (${active.ramData.used_gb} GB)` : `${active.ram}%`)
+      : 'OFFLINE';
+  }
+
+  const storageSummary = document.getElementById('storage-header-summary');
+  if (storageSummary) {
+    storageSummary.textContent = isOnline
+      ? (active.diskData ? `${active.diskData.percent}% USED` : 'ONLINE')
+      : 'OFFLINE';
+  }
+
+  const netSummary = document.getElementById('net-header-summary');
+  if (netSummary) {
+    netSummary.textContent = isOnline
+      ? `↓ ${active.netDl || 0} / ↑ ${active.netUl || 0} Mbps`
+      : 'OFFLINE';
+  }
+
+  const gpuSummary = document.getElementById('gpu-header-summary');
+  if (gpuSummary) {
+    gpuSummary.textContent = isOnline
+      ? (active.gpu ? `${active.gpu.load}% (${active.gpu.temp || 58}°C)` : '34% LOAD')
+      : '--';
+  }
+
   renderProcesses();
 
   // Charts
@@ -1037,6 +1069,42 @@ function setupEvents() {
   }
   if (btnConfirmRestart) {
     btnConfirmRestart.addEventListener('click', executeRestartComputer);
+  }
+
+  // Collapsible Metric Cards Listeners
+  document.querySelectorAll('.metric-card .card-header').forEach(header => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('a') || e.target.closest('button')) return;
+      const card = header.closest('.metric-card');
+      if (card) {
+        card.classList.toggle('collapsed');
+        updateToggleAllMetricsBtnText();
+      }
+    });
+  });
+
+  const btnToggleAllMetrics = document.getElementById('btn-toggle-all-metrics');
+  if (btnToggleAllMetrics) {
+    btnToggleAllMetrics.addEventListener('click', () => {
+      const cards = document.querySelectorAll('.metric-card');
+      const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
+      cards.forEach(c => {
+        if (anyCollapsed) {
+          c.classList.remove('collapsed');
+        } else {
+          c.classList.add('collapsed');
+        }
+      });
+      updateToggleAllMetricsBtnText();
+    });
+  }
+
+  function updateToggleAllMetricsBtnText() {
+    const btn = document.getElementById('btn-toggle-all-metrics');
+    if (!btn) return;
+    const cards = document.querySelectorAll('.metric-card');
+    const anyCollapsed = Array.from(cards).some(c => c.classList.contains('collapsed'));
+    btn.innerHTML = anyCollapsed ? '<span>⊞ Expand All Cards</span>' : '<span>⊟ Collapse All Cards</span>';
   }
 
   window.addEventListener('resize', () => {
