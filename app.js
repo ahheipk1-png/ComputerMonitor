@@ -712,16 +712,16 @@ let pendingRestartNodeId = null;
 function openRestartModal(nodeId) {
   pendingRestartNodeId = nodeId;
   const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
-  const nameEl = document.getElementById('restart-node-target-name');
-  if (nameEl) nameEl.textContent = getNodeDisplayName(node);
+  const nameEl = document.getElementById('restart-target-node') || document.getElementById('restart-node-target-name');
+  if (nameEl) nameEl.textContent = `${getNodeDisplayName(node)} (${node.rawHostname || node.name || 'Remote PC'})`;
 
-  const modal = document.getElementById('restart-confirm-modal');
+  const modal = document.getElementById('restart-computer-modal') || document.getElementById('restart-confirm-modal');
   if (modal) modal.classList.add('active');
 }
 
 function closeRestartModal() {
   pendingRestartNodeId = null;
-  const modal = document.getElementById('restart-confirm-modal');
+  const modal = document.getElementById('restart-computer-modal') || document.getElementById('restart-confirm-modal');
   if (modal) modal.classList.remove('active');
 }
 
