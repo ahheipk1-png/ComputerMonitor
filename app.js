@@ -1,36 +1,148 @@
 /**
- * ComputerMonitor Telemetry Engine
- * Supports Simulated Mode & Live Local Agent Telemetry
+ * ComputerMonitor Fleet Telemetry Engine
+ * Multi-Machine Cluster & Real-Time Observer
  */
 
-// State Management
-const state = {
-  mode: 'sim', // 'sim' | 'agent'
-  agentConnected: false,
-  agentUrl: 'http://localhost:5500/metrics',
-  historyLength: 30,
-  history: {
-    cpu: new Array(30).fill(25),
-    ram: new Array(30).fill(48),
-    disk: new Array(30).fill(10),
-    net: new Array(30).fill(40),
+// Default fleet configurations
+const DEFAULT_NODES = [
+  {
+    id: 'node-win-01',
+    name: 'Primary Workstation',
+    os: 'Windows 11 Pro',
+    osIcon: '🪟',
+    cpuModel: 'Intel Core i9-13900K (16C/24T)',
+    ramTotal: 32.0,
+    endpoint: 'http://localhost:5500/metrics',
+    status: 'online',
+    ip: '192.168.1.100',
+    uptime: 15502,
+    cpu: 28,
+    ram: 48,
+    disk: 58,
+    temp: 46,
+    ping: 12,
+    netDl: 84.2,
+    netUl: 16.8,
+    history: {
+      cpu: new Array(30).fill(28),
+      ram: new Array(30).fill(48),
+      disk: new Array(30).fill(12),
+      net: new Array(30).fill(40),
+    },
+    processes: [
+      { pid: 4812, name: 'chrome.exe', cpu: 6.4, mem: 1420, io: '1.2 MB/s', status: 'running' },
+      { pid: 1092, name: 'Code.exe (VSCode)', cpu: 4.8, mem: 980, io: '0.4 MB/s', status: 'running' },
+      { pid: 8224, name: 'python.exe', cpu: 3.2, mem: 612, io: '8.4 MB/s', status: 'running' },
+      { pid: 2190, name: 'Discord.exe', cpu: 1.5, mem: 430, io: '0.1 MB/s', status: 'running' },
+      { pid: 904,  name: 'System Idle Process', cpu: 72.0, mem: 8, io: '0.0 MB/s', status: 'running' },
+      { pid: 3340, name: 'Spotify.exe', cpu: 0.9, mem: 310, io: '0.2 MB/s', status: 'running' },
+      { pid: 5612, name: 'explorer.exe', cpu: 0.7, mem: 240, io: '0.1 MB/s', status: 'sleeping' },
+      { pid: 7780, name: 'docker-desktop.exe', cpu: 2.1, mem: 1840, io: '4.1 MB/s', status: 'running' },
+    ]
   },
-  uptimeSeconds: 15502,
-  coreCount: 16,
-  cores: new Array(16).fill(25),
-  processes: [
-    { pid: 4812, name: 'chrome.exe', cpu: 6.4, mem: 1420, io: '1.2 MB/s', status: 'running' },
-    { pid: 1092, name: 'Code.exe (VSCode)', cpu: 4.8, mem: 980, io: '0.4 MB/s', status: 'running' },
-    { pid: 8224, name: 'python.exe', cpu: 3.2, mem: 612, io: '8.4 MB/s', status: 'running' },
-    { pid: 2190, name: 'Discord.exe', cpu: 1.5, mem: 430, io: '0.1 MB/s', status: 'running' },
-    { pid: 904,  name: 'System Idle Process', cpu: 72.0, mem: 8, io: '0.0 MB/s', status: 'running' },
-    { pid: 3340, name: 'Spotify.exe', cpu: 0.9, mem: 310, io: '0.2 MB/s', status: 'running' },
-    { pid: 5612, name: 'explorer.exe', cpu: 0.7, mem: 240, io: '0.1 MB/s', status: 'sleeping' },
-    { pid: 7780, name: 'docker-desktop.exe', cpu: 2.1, mem: 1840, io: '4.1 MB/s', status: 'running' },
-    { pid: 1456, name: 'Terminal.exe', cpu: 0.3, mem: 95, io: '0.0 MB/s', status: 'sleeping' },
-    { pid: 6632, name: 'dwm.exe (Desktop Window)', cpu: 1.8, mem: 180, io: '0.0 MB/s', status: 'running' },
-  ],
+  {
+    id: 'node-linux-02',
+    name: 'Linux Compute Server',
+    os: 'Ubuntu 22.04 LTS',
+    osIcon: '🐧',
+    cpuModel: 'AMD EPYC 7763 32-Core',
+    ramTotal: 64.0,
+    endpoint: 'http://192.168.1.150:5500/metrics',
+    status: 'online',
+    ip: '192.168.1.150',
+    uptime: 849204,
+    cpu: 64,
+    ram: 72,
+    disk: 44,
+    temp: 58,
+    ping: 18,
+    netDl: 340.5,
+    netUl: 180.2,
+    history: {
+      cpu: new Array(30).fill(64),
+      ram: new Array(30).fill(72),
+      disk: new Array(30).fill(45),
+      net: new Array(30).fill(80),
+    },
+    processes: [
+      { pid: 1402, name: 'dockerd', cpu: 24.1, mem: 4800, io: '42.0 MB/s', status: 'running' },
+      { pid: 2198, name: 'postgres', cpu: 14.8, mem: 3200, io: '18.5 MB/s', status: 'running' },
+      { pid: 3892, name: 'nginx worker', cpu: 3.4, mem: 380, io: '5.2 MB/s', status: 'running' },
+      { pid: 4001, name: 'redis-server', cpu: 2.1, mem: 840, io: '1.8 MB/s', status: 'running' },
+      { pid: 1,    name: 'systemd', cpu: 0.1, mem: 48, io: '0.0 MB/s', status: 'sleeping' },
+    ]
+  },
+  {
+    id: 'node-mac-03',
+    name: 'MacBook Pro M3',
+    os: 'macOS Sonoma',
+    osIcon: '🍎',
+    cpuModel: 'Apple M3 Max (14-core)',
+    ramTotal: 36.0,
+    endpoint: 'http://192.168.1.210:5500/metrics',
+    status: 'online',
+    ip: '192.168.1.210',
+    uptime: 48200,
+    cpu: 18,
+    ram: 39,
+    disk: 32,
+    temp: 39,
+    ping: 9,
+    netDl: 52.4,
+    netUl: 8.2,
+    history: {
+      cpu: new Array(30).fill(18),
+      ram: new Array(30).fill(39),
+      disk: new Array(30).fill(8),
+      net: new Array(30).fill(25),
+    },
+    processes: [
+      { pid: 812,  name: 'WindowServer', cpu: 4.2, mem: 850, io: '0.8 MB/s', status: 'running' },
+      { pid: 1540, name: 'Xcode', cpu: 8.1, mem: 3400, io: '12.0 MB/s', status: 'running' },
+      { pid: 3110, name: 'Safari', cpu: 2.4, mem: 1100, io: '0.3 MB/s', status: 'running' },
+      { pid: 908,  name: 'Terminal', cpu: 0.2, mem: 120, io: '0.0 MB/s', status: 'sleeping' },
+    ]
+  },
+  {
+    id: 'node-office-04',
+    name: 'Office AI / Gaming Rig',
+    os: 'Windows 11 Home',
+    osIcon: '⚡',
+    cpuModel: 'AMD Ryzen 7 7800X3D',
+    ramTotal: 32.0,
+    endpoint: 'http://192.168.1.120:5500/metrics',
+    status: 'online',
+    ip: '192.168.1.120',
+    uptime: 9400,
+    cpu: 42,
+    ram: 54,
+    disk: 78,
+    temp: 52,
+    ping: 15,
+    netDl: 112.0,
+    netUl: 34.5,
+    history: {
+      cpu: new Array(30).fill(42),
+      ram: new Array(30).fill(54),
+      disk: new Array(30).fill(25),
+      net: new Array(30).fill(50),
+    },
+    processes: [
+      { pid: 6104, name: 'Ollama-daemon.exe', cpu: 28.5, mem: 8200, io: '14.0 MB/s', status: 'running' },
+      { pid: 4120, name: 'Steam.exe', cpu: 1.2, mem: 490, io: '0.1 MB/s', status: 'running' },
+      { pid: 8810, name: 'discord.exe', cpu: 1.8, mem: 380, io: '0.1 MB/s', status: 'running' },
+    ]
+  }
+];
+
+// App State
+const state = {
+  nodes: JSON.parse(localStorage.getItem('cm_fleet_nodes')) || DEFAULT_NODES,
+  selectedNodeId: 'node-win-01',
+  viewMode: 'detailed', // 'detailed' | 'fleet'
+  mode: 'sim',          // 'sim' | 'agent'
   searchQuery: '',
+  coreCount: 16,
 };
 
 // Canvas references
@@ -40,6 +152,177 @@ const canvases = {
   disk: document.getElementById('disk-chart'),
   net: document.getElementById('net-chart'),
 };
+
+// Get active node object
+function getActiveNode() {
+  return state.nodes.find(n => n.id === state.selectedNodeId) || state.nodes[0];
+}
+
+// Save nodes to localStorage
+function saveNodes() {
+  localStorage.setItem('cm_fleet_nodes', JSON.stringify(state.nodes));
+}
+
+// Render Fleet Bar
+function renderFleetBar() {
+  const container = document.getElementById('fleet-nodes-container');
+  const countEl = document.getElementById('fleet-count');
+  countEl.textContent = state.nodes.length;
+  container.innerHTML = '';
+
+  state.nodes.forEach(node => {
+    const isSelected = node.id === state.selectedNodeId;
+    const card = document.createElement('div');
+    card.className = `fleet-node-card ${isSelected ? 'selected' : ''}`;
+    card.dataset.id = node.id;
+    card.innerHTML = `
+      <div class="node-card-top">
+        <div class="node-card-brand">
+          <span class="node-os-icon">${node.osIcon || '🖥️'}</span>
+          <span class="node-card-name" title="${node.name}">${node.name}</span>
+        </div>
+        <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+      </div>
+      <div class="node-card-stats">
+        <div class="node-mini-stat">
+          <span class="node-mini-lbl">CPU</span>
+          <span class="node-mini-val ${node.cpu > 75 ? 'text-rose' : 'text-cyan'}">${node.cpu}%</span>
+        </div>
+        <div class="node-mini-stat">
+          <span class="node-mini-lbl">RAM</span>
+          <span class="node-mini-val text-purple">${node.ram}%</span>
+        </div>
+        <div class="node-mini-stat">
+          <span class="node-mini-lbl">TEMP</span>
+          <span class="node-mini-val text-emerald">${node.temp}°C</span>
+        </div>
+      </div>
+    `;
+
+    card.addEventListener('click', () => {
+      selectNode(node.id);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+// Render Comparison Fleet Grid View
+function renderFleetComparisonGrid() {
+  const grid = document.getElementById('comparison-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  state.nodes.forEach(node => {
+    const card = document.createElement('div');
+    card.className = 'comp-node-card';
+    card.innerHTML = `
+      <div class="comp-header">
+        <div class="comp-title-block">
+          <h3>${node.osIcon || '🖥️'} ${node.name}</h3>
+          <p>${node.os} &bull; ${node.ip}</p>
+        </div>
+        <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+      </div>
+
+      <div class="comp-metrics-list">
+        <div class="comp-metric-row">
+          <div class="comp-metric-info">
+            <span>CPU Usage (${node.cpuModel})</span>
+            <span class="font-mono text-cyan">${node.cpu}%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill fill-cyan" style="width: ${node.cpu}%;"></div>
+          </div>
+        </div>
+
+        <div class="comp-metric-row">
+          <div class="comp-metric-info">
+            <span>Memory (${((node.ram / 100) * node.ramTotal).toFixed(1)} / ${node.ramTotal} GB)</span>
+            <span class="font-mono text-purple">${node.ram}%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill fill-purple" style="width: ${node.ram}%;"></div>
+          </div>
+        </div>
+
+        <div class="comp-metric-row">
+          <div class="comp-metric-info">
+            <span>Disk Space Used</span>
+            <span class="font-mono text-amber">${node.disk}%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill fill-amber" style="width: ${node.disk}%;"></div>
+          </div>
+        </div>
+
+        <div class="stat-row">
+          <span class="stat-label">Core Thermals:</span>
+          <span class="stat-value font-mono text-emerald">${node.temp} °C</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Network:</span>
+          <span class="stat-value font-mono">↓ ${node.netDl} Mbps &bull; ↑ ${node.netUl} Mbps</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Ping Latency:</span>
+          <span class="stat-value font-mono text-cyan">${node.ping} ms</span>
+        </div>
+      </div>
+
+      <button class="btn-comp-drill" data-id="${node.id}">Drilldown Detailed Telemetry &rarr;</button>
+    `;
+
+    card.querySelector('.btn-comp-drill').addEventListener('click', () => {
+      selectNode(node.id);
+      switchViewMode('detailed');
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// Select a specific computer node
+function selectNode(nodeId) {
+  state.selectedNodeId = nodeId;
+  renderFleetBar();
+  updateActiveNodeBanner();
+  renderProcesses();
+}
+
+// Update Active Node Banner
+function updateActiveNodeBanner() {
+  const node = getActiveNode();
+  document.getElementById('active-node-name').textContent = `${node.name}`;
+  document.getElementById('active-node-desc').textContent = `${node.os} • ${node.cpuModel} • IP: ${node.ip}`;
+  document.getElementById('meta-status').textContent = node.status.toUpperCase();
+  document.getElementById('meta-uptime').textContent = formatUptime(node.uptime);
+  document.getElementById('meta-ping').textContent = `${node.ping} ms`;
+  document.getElementById('cpu-name').textContent = node.cpuModel;
+  document.getElementById('proc-node-tag').textContent = node.name;
+}
+
+// Switch between Detailed and Fleet Grid view
+function switchViewMode(mode) {
+  state.viewMode = mode;
+  const btnDetailed = document.getElementById('btn-view-detailed');
+  const btnFleet = document.getElementById('btn-view-fleet');
+  const detailedContainer = document.getElementById('detailed-telemetry-container');
+  const fleetContainer = document.getElementById('fleet-comparison-view');
+
+  if (mode === 'detailed') {
+    btnDetailed.classList.add('active');
+    btnFleet.classList.remove('active');
+    detailedContainer.style.display = 'block';
+    fleetContainer.style.display = 'none';
+  } else {
+    btnFleet.classList.add('active');
+    btnDetailed.classList.remove('active');
+    detailedContainer.style.display = 'none';
+    fleetContainer.style.display = 'block';
+    renderFleetComparisonGrid();
+  }
+}
 
 // Initialize Cores Grid
 function initCores() {
@@ -66,12 +349,7 @@ function formatUptime(secs) {
   return `${hrs}:${mins}:${s}`;
 }
 
-function updateUptime() {
-  state.uptimeSeconds++;
-  document.getElementById('meta-uptime').textContent = formatUptime(state.uptimeSeconds);
-}
-
-// Sparkline Drawer with Glow Gradient
+// Sparkline Drawer
 function drawSparkline(canvas, data, colorHex, glowHex) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -79,13 +357,11 @@ function drawSparkline(canvas, data, colorHex, glowHex) {
   const height = (canvas.height = canvas.parentElement.clientHeight);
 
   ctx.clearRect(0, 0, width, height);
-
   if (data.length < 2) return;
 
   const step = width / (data.length - 1);
   const maxVal = 100;
 
-  // Path
   ctx.beginPath();
   data.forEach((val, i) => {
     const x = i * step;
@@ -94,7 +370,6 @@ function drawSparkline(canvas, data, colorHex, glowHex) {
     else ctx.lineTo(x, y);
   });
 
-  // Stroke Line
   ctx.strokeStyle = colorHex;
   ctx.lineWidth = 2;
   ctx.shadowColor = glowHex;
@@ -102,7 +377,6 @@ function drawSparkline(canvas, data, colorHex, glowHex) {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // Fill gradient underneath
   ctx.lineTo(width, height);
   ctx.lineTo(0, height);
   ctx.closePath();
@@ -118,18 +392,20 @@ function setRadialGauge(elementId, percent) {
   const circle = document.getElementById(elementId);
   if (!circle) return;
   const radius = 50;
-  const circumference = 2 * Math.PI * radius; // ~314.159
+  const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
   circle.style.strokeDashoffset = offset;
 }
 
 // Dynamic Process Rendering & Filtering
 function renderProcesses() {
+  const node = getActiveNode();
   const tbody = document.getElementById('proc-table-body');
   const countSpan = document.getElementById('proc-display-count');
   const query = state.searchQuery.toLowerCase();
 
-  const filtered = state.processes.filter(p => 
+  const procs = node.processes || [];
+  const filtered = procs.filter(p => 
     p.name.toLowerCase().includes(query) || p.pid.toString().includes(query)
   );
 
@@ -153,161 +429,157 @@ function renderProcesses() {
   });
 }
 
-// Random float generator within range
 function randRange(min, max) {
   return min + Math.random() * (max - min);
 }
 
-// Simulation Tick
-function simulateTelemetry() {
-  // 1. CPU Simulation
-  const baseCpu = 22 + Math.sin(Date.now() / 3000) * 12 + randRange(-5, 8);
-  const cpuPercent = Math.min(Math.max(Math.round(baseCpu), 4), 98);
-  
-  document.getElementById('cpu-percentage').textContent = `${cpuPercent}%`;
-  document.getElementById('cpu-avg').textContent = `Avg: ${cpuPercent}%`;
-  setRadialGauge('cpu-circle', cpuPercent);
+// Simulation Tick for all Fleet computers
+function simulateFleet() {
+  state.nodes.forEach(node => {
+    node.uptime++;
 
-  // Dynamic Frequency & Temp
-  const ghz = (3.4 + (cpuPercent / 100) * 1.6).toFixed(2);
+    // Simulated variation based on node profile
+    const jitter = randRange(-4, 4);
+    node.cpu = Math.min(Math.max(Math.round(node.cpu + jitter), 8), 98);
+    node.ram = Math.min(Math.max(Math.round(node.ram + randRange(-1, 1)), 20), 92);
+    node.temp = Math.round(36 + (node.cpu / 100) * 34);
+    node.ping = Math.max(5, Math.round(node.ping + randRange(-1, 1)));
+    node.netDl = +(node.netDl + randRange(-3, 4)).toFixed(1);
+    node.netUl = +(node.netUl + randRange(-1, 2)).toFixed(1);
+
+    if (!node.history) {
+      node.history = {
+        cpu: new Array(30).fill(node.cpu),
+        ram: new Array(30).fill(node.ram),
+        disk: new Array(30).fill(15),
+        net: new Array(30).fill(40),
+      };
+    }
+
+    node.history.cpu.shift();
+    node.history.cpu.push(node.cpu);
+    node.history.ram.shift();
+    node.history.ram.push(node.ram);
+    node.history.disk.shift();
+    node.history.disk.push(Math.min(node.disk, 100));
+    node.history.net.shift();
+    node.history.net.push(Math.min(node.netDl / 4, 100));
+
+    // Process jitter
+    if (node.processes) {
+      node.processes.forEach(p => {
+        if (p.name !== 'System Idle Process') {
+          p.cpu = Math.max(0.1, +(p.cpu + randRange(-0.3, 0.3)).toFixed(1));
+        }
+      });
+    }
+  });
+
+  renderFleetBar();
+
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+    return;
+  }
+
+  // Update currently selected node details
+  const active = getActiveNode();
+  document.getElementById('cpu-percentage').textContent = `${active.cpu}%`;
+  document.getElementById('cpu-avg').textContent = `Avg: ${active.cpu}%`;
+  setRadialGauge('cpu-circle', active.cpu);
+
+  const ghz = (3.2 + (active.cpu / 100) * 1.8).toFixed(2);
   document.getElementById('cpu-freq').textContent = `${ghz} GHz`;
-  const temp = Math.round(38 + (cpuPercent / 100) * 32);
-  document.getElementById('cpu-temp').textContent = `${temp} °C`;
+  document.getElementById('cpu-temp').textContent = `${active.temp} °C`;
+  document.getElementById('meta-uptime').textContent = formatUptime(active.uptime);
+  document.getElementById('meta-ping').textContent = `${active.ping} ms`;
 
   // Cores
   for (let i = 0; i < state.coreCount; i++) {
-    const coreVal = Math.min(Math.max(Math.round(cpuPercent + randRange(-18, 22)), 2), 100);
+    const coreVal = Math.min(Math.max(Math.round(active.cpu + randRange(-16, 18)), 2), 100);
     const el = document.getElementById(`core-fill-${i}`);
     if (el) el.style.height = `${coreVal}%`;
   }
 
-  // 2. RAM Simulation
-  const ramPercent = Math.min(Math.max(Math.round(48 + Math.sin(Date.now() / 15000) * 4), 30), 85);
-  const ramTotal = 32.0;
-  const ramUsed = ((ramPercent / 100) * ramTotal).toFixed(1);
+  // RAM
+  const ramTotal = active.ramTotal || 32.0;
+  const ramUsed = ((active.ram / 100) * ramTotal).toFixed(1);
   const ramFree = (ramTotal - ramUsed).toFixed(1);
 
-  document.getElementById('ram-percentage').textContent = `${ramPercent}%`;
-  setRadialGauge('ram-circle', ramPercent);
+  document.getElementById('ram-percentage').textContent = `${active.ram}%`;
+  setRadialGauge('ram-circle', active.ram);
   document.getElementById('ram-used').textContent = `${ramUsed} GB`;
   document.getElementById('ram-free').textContent = `${ramFree} GB`;
   document.getElementById('ram-summary-txt').textContent = `${ramUsed} GB / ${ramTotal} GB`;
-  document.getElementById('ram-seg-used').style.width = `${ramPercent}%`;
+  document.getElementById('ram-seg-used').style.width = `${active.ram}%`;
 
-  // 3. Disk Rates
+  // Disk & Network
   const readRate = (randRange(20, 240)).toFixed(1);
   const writeRate = (randRange(5, 75)).toFixed(1);
   document.getElementById('disk-read-rate').textContent = `${readRate} MB/s`;
   document.getElementById('disk-write-rate').textContent = `${writeRate} MB/s`;
+  document.getElementById('net-dl-speed').textContent = active.netDl;
+  document.getElementById('net-ul-speed').textContent = active.netUl;
 
-  // 4. Network
-  const dl = (randRange(35, 120)).toFixed(1);
-  const ul = (randRange(8, 28)).toFixed(1);
-  document.getElementById('net-dl-speed').textContent = dl;
-  document.getElementById('net-ul-speed').textContent = ul;
-  const ping = Math.round(randRange(11, 24));
-  document.getElementById('net-ping').textContent = `Latency: ${ping} ms`;
-
-  // 5. GPU
-  const gpuL = Math.min(Math.max(Math.round(30 + Math.cos(Date.now() / 4000) * 20), 5), 98);
-  document.getElementById('gpu-load').textContent = `${gpuL}%`;
-  document.getElementById('gpu-load-bar').style.width = `${gpuL}%`;
-  document.getElementById('gpu-temp-badge').textContent = `${Math.round(52 + (gpuL / 100) * 20)} °C`;
-
-  // Push to history charts
-  state.history.cpu.shift();
-  state.history.cpu.push(cpuPercent);
-
-  state.history.ram.shift();
-  state.history.ram.push(ramPercent);
-
-  state.history.disk.shift();
-  state.history.disk.push(Math.min((parseFloat(readRate) + parseFloat(writeRate)) / 3, 100));
-
-  state.history.net.shift();
-  state.history.net.push(Math.min(parseFloat(dl), 100));
-
-  // Slight process jitter
-  state.processes.forEach(p => {
-    if (p.name !== 'System Idle Process') {
-      p.cpu = Math.max(0.1, +(p.cpu + randRange(-0.4, 0.4)).toFixed(1));
-    }
-  });
   renderProcesses();
 
-  // Draw Charts
-  drawSparkline(canvases.cpu, state.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
-  drawSparkline(canvases.ram, state.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
-  drawSparkline(canvases.disk, state.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
-  drawSparkline(canvases.net, state.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
+  // Draw Charts for active node
+  drawSparkline(canvases.cpu, active.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
+  drawSparkline(canvases.ram, active.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
+  drawSparkline(canvases.disk, active.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
+  drawSparkline(canvases.net, active.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
 }
 
-// Live Agent Fetcher
+// Live Local Agent Fetcher
 async function fetchLocalAgentMetrics() {
+  const active = getActiveNode();
   try {
-    const res = await fetch(state.agentUrl, { method: 'GET', signal: AbortSignal.timeout(1200) });
+    const res = await fetch(active.endpoint || 'http://localhost:5500/metrics', {
+      method: 'GET',
+      signal: AbortSignal.timeout(1200)
+    });
     if (!res.ok) throw new Error('Agent HTTP error');
     const data = await res.json();
 
-    state.agentConnected = true;
+    active.status = 'online';
     document.getElementById('connection-status').className = 'connection-status online';
-    document.getElementById('status-text').textContent = 'Agent Syncing (Live)';
+    document.getElementById('status-text').textContent = `${active.name} (Live)`;
 
-    // Update real metrics
-    if (data.hostname) document.getElementById('meta-host').textContent = data.hostname;
-    if (data.os) document.getElementById('meta-os').textContent = data.os;
-
-    if (data.cpu !== undefined) {
-      const cpuVal = Math.round(data.cpu);
-      document.getElementById('cpu-percentage').textContent = `${cpuVal}%`;
-      setRadialGauge('cpu-circle', cpuVal);
-      state.history.cpu.shift();
-      state.history.cpu.push(cpuVal);
-    }
-
+    if (data.hostname) active.name = data.hostname;
+    if (data.cpu !== undefined) active.cpu = Math.round(data.cpu);
     if (data.ram) {
-      const ramVal = Math.round(data.ram.percent);
-      document.getElementById('ram-percentage').textContent = `${ramVal}%`;
-      setRadialGauge('ram-circle', ramVal);
-      document.getElementById('ram-used').textContent = `${data.ram.used_gb} GB`;
-      document.getElementById('ram-free').textContent = `${data.ram.free_gb} GB`;
-      document.getElementById('ram-summary-txt').textContent = `${data.ram.used_gb} GB / ${data.ram.total_gb} GB`;
-      document.getElementById('ram-seg-used').style.width = `${ramVal}%`;
-      state.history.ram.shift();
-      state.history.ram.push(ramVal);
+      active.ram = Math.round(data.ram.percent);
+      active.ramTotal = data.ram.total_gb;
     }
+    if (data.processes && data.processes.length) active.processes = data.processes;
 
-    if (data.processes && data.processes.length) {
-      state.processes = data.processes;
-      renderProcesses();
-    }
-
-    // Redraw charts
-    drawSparkline(canvases.cpu, state.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
-    drawSparkline(canvases.ram, state.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
+    simulateFleet();
   } catch (err) {
-    state.agentConnected = false;
     document.getElementById('connection-status').className = 'connection-status';
-    document.getElementById('status-text').textContent = 'Agent Offline (Falling back)';
-    // Fall back to simulation
-    simulateTelemetry();
+    document.getElementById('status-text').textContent = `${active.name} (Offline - Simulating)`;
+    simulateFleet();
   }
 }
 
 // Master Loop
 function loop() {
   if (state.mode === 'sim') {
-    simulateTelemetry();
+    simulateFleet();
   } else {
     fetchLocalAgentMetrics();
   }
 }
 
-// UI Event Listeners
+// UI Event Listeners & Modals
 function setupEvents() {
+  const btnDetailed = document.getElementById('btn-view-detailed');
+  const btnFleet = document.getElementById('btn-view-fleet');
   const btnSim = document.getElementById('btn-mode-sim');
   const btnAgent = document.getElementById('btn-mode-agent');
   const searchInput = document.getElementById('proc-search');
+
+  btnDetailed.addEventListener('click', () => switchViewMode('detailed'));
+  btnFleet.addEventListener('click', () => switchViewMode('fleet'));
 
   btnSim.addEventListener('click', () => {
     state.mode = 'sim';
@@ -330,43 +602,99 @@ function setupEvents() {
     renderProcesses();
   });
 
-  // Modal
-  const modal = document.getElementById('agent-modal');
+  // Add Node Modal
+  const addModal = document.getElementById('add-node-modal');
+  const btnAddNode = document.getElementById('btn-add-node');
+  const btnCloseAddModal = document.getElementById('add-node-modal-close');
+  const btnCancelNode = document.getElementById('btn-cancel-node');
+  const addForm = document.getElementById('add-node-form');
+
+  btnAddNode.addEventListener('click', () => addModal.classList.add('active'));
+  btnCloseAddModal.addEventListener('click', () => addModal.classList.remove('active'));
+  btnCancelNode.addEventListener('click', () => addModal.classList.remove('active'));
+
+  addForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('node-input-name').value.trim();
+    const os = document.getElementById('node-input-os').value;
+    const url = document.getElementById('node-input-url').value.trim();
+
+    let icon = '🖥️';
+    if (os.includes('Windows')) icon = '🪟';
+    else if (os.includes('macOS')) icon = '🍎';
+    else if (os.includes('Linux') || os.includes('Ubuntu')) icon = '🐧';
+
+    const newNode = {
+      id: `node-custom-${Date.now()}`,
+      name: name,
+      os: os,
+      osIcon: icon,
+      cpuModel: `${os} CPU`,
+      ramTotal: 16.0,
+      endpoint: url,
+      status: 'online',
+      ip: url.replace('http://', '').split(':')[0] || '192.168.1.X',
+      uptime: 100,
+      cpu: 25,
+      ram: 45,
+      disk: 50,
+      temp: 42,
+      ping: 15,
+      netDl: 50.0,
+      netUl: 10.0,
+      history: {
+        cpu: new Array(30).fill(25),
+        ram: new Array(30).fill(45),
+        disk: new Array(30).fill(15),
+        net: new Array(30).fill(30),
+      },
+      processes: [
+        { pid: 1001, name: 'system_daemon', cpu: 1.2, mem: 140, io: '0.1 MB/s', status: 'running' }
+      ]
+    };
+
+    state.nodes.push(newNode);
+    saveNodes();
+    selectNode(newNode.id);
+    addModal.classList.remove('active');
+    addForm.reset();
+  });
+
+  // Agent Modal
+  const agentModal = document.getElementById('agent-modal');
   const btnHelp = document.getElementById('btn-agent-help');
-  const btnClose = document.getElementById('modal-close');
+  const btnCloseAgent = document.getElementById('modal-close');
 
   if (btnHelp) {
     btnHelp.addEventListener('click', (e) => {
       e.preventDefault();
-      modal.classList.add('active');
+      agentModal.classList.add('active');
     });
   }
 
-  if (btnClose) {
-    btnClose.addEventListener('click', () => {
-      modal.classList.remove('active');
+  if (btnCloseAgent) {
+    btnCloseAgent.addEventListener('click', () => {
+      agentModal.classList.remove('active');
     });
   }
-
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.classList.remove('active');
-  });
 
   window.addEventListener('resize', () => {
-    drawSparkline(canvases.cpu, state.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
-    drawSparkline(canvases.ram, state.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
-    drawSparkline(canvases.disk, state.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
-    drawSparkline(canvases.net, state.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
+    const active = getActiveNode();
+    drawSparkline(canvases.cpu, active.history.cpu, '#38bdf8', 'rgba(56, 189, 248, 0.3)');
+    drawSparkline(canvases.ram, active.history.ram, '#a78bfa', 'rgba(167, 139, 250, 0.3)');
+    drawSparkline(canvases.disk, active.history.disk, '#fbbf24', 'rgba(251, 191, 36, 0.3)');
+    drawSparkline(canvases.net, active.history.net, '#34d399', 'rgba(52, 211, 153, 0.3)');
   });
 }
 
 // App Entry Point
 window.addEventListener('DOMContentLoaded', () => {
   initCores();
-  renderProcesses();
   setupEvents();
+  renderFleetBar();
+  updateActiveNodeBanner();
+  renderProcesses();
   loop();
 
-  setInterval(updateUptime, 1000);
   setInterval(loop, 1200);
 });
