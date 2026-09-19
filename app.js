@@ -393,7 +393,7 @@ async function pollRealFleet() {
     try {
       const res = await fetch(node.endpoint, {
         method: 'GET',
-        signal: AbortSignal.timeout(1500)
+        signal: AbortSignal.timeout(3500)
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
