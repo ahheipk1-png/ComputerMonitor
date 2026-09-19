@@ -40,6 +40,8 @@ const state = {
   selectedNodeId: 'node-local',
   viewMode: 'detailed',
   searchQuery: '',
+  sortCol: 'cpu',
+  sortDir: 'desc',
 };
 
 // Canvas references
@@ -364,6 +366,21 @@ async function requestStopProcess(identifier, isPid = true) {
   }
 }
 
+function updateSortIndicators() {
+  document.querySelectorAll('.sortable-th').forEach(th => {
+    const col = th.dataset.sort;
+    const arrow = th.querySelector('.sort-arrow');
+    if (!arrow) return;
+    if (col === state.sortCol) {
+      th.classList.add('sorted');
+      arrow.textContent = state.sortDir === 'asc' ? '▲' : '▼';
+    } else {
+      th.classList.remove('sorted');
+      arrow.textContent = '↕';
+    }
+  });
+}
+
 // Render Real Processes
 function renderProcesses() {
   const node = getActiveNode();
@@ -371,10 +388,28 @@ function renderProcesses() {
   const countSpan = document.getElementById('proc-display-count');
   const query = state.searchQuery.toLowerCase();
 
-  const procs = node.processes || [];
+  const procs = (node.processes || []).slice();
   const filtered = procs.filter(p => 
     p.name.toLowerCase().includes(query) || p.pid.toString().includes(query)
   );
+
+  // Column Sorting
+  filtered.sort((a, b) => {
+    let valA = a[state.sortCol];
+    let valB = b[state.sortCol];
+
+    if (typeof valA === 'string' || typeof valB === 'string') {
+      valA = String(valA || '').toLowerCase();
+      valB = String(valB || '').toLowerCase();
+      return state.sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else {
+      valA = valA !== undefined ? Number(valA) : 0;
+      valB = valB !== undefined ? Number(valB) : 0;
+      return state.sortDir === 'asc' ? (valA - valB) : (valB - valA);
+    }
+  });
+
+  updateSortIndicators();
 
   countSpan.textContent = `Showing ${filtered.length} processes`;
   tbody.innerHTML = '';
@@ -761,6 +796,20 @@ function setupEvents() {
       requestStopProcess(val, isPid);
     });
   }
+
+  // Process Table Column Sorting Click Listeners
+  document.querySelectorAll('.sortable-th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (state.sortCol === col) {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sortCol = col;
+        state.sortDir = (col === 'name' || col === 'status' || col === 'io') ? 'asc' : 'desc';
+      }
+      renderProcesses();
+    });
+  });
 
   window.addEventListener('resize', () => {
     updateDetailedView();

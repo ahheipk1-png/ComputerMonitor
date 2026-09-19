@@ -450,12 +450,12 @@
             <table class="proc-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">PID</th>
-                  <th>PROCESS NAME</th>
-                  <th style="width: 110px;">CPU %</th>
-                  <th style="width: 130px;">MEMORY</th>
-                  <th style="width: 110px;">DISK I/O</th>
-                  <th style="width: 100px;">STATUS</th>
+                  <th class="sortable-th" data-sort="pid" style="width: 85px;" title="Sort by PID">PID <span class="sort-arrow">↕</span></th>
+                  <th class="sortable-th" data-sort="name" title="Sort by Process Name">PROCESS NAME <span class="sort-arrow">↕</span></th>
+                  <th class="sortable-th sorted" data-sort="cpu" style="width: 110px;" title="Sort by CPU Usage">CPU % <span class="sort-arrow">▼</span></th>
+                  <th class="sortable-th" data-sort="mem" style="width: 130px;" title="Sort by Memory Usage">MEMORY <span class="sort-arrow">↕</span></th>
+                  <th class="sortable-th" data-sort="io" style="width: 110px;" title="Sort by Disk I/O">DISK I/O <span class="sort-arrow">↕</span></th>
+                  <th class="sortable-th" data-sort="status" style="width: 100px;" title="Sort by Status">STATUS <span class="sort-arrow">↕</span></th>
                   <th style="width: 90px; text-align: right;">ACTION</th>
                 </tr>
               </thead>
