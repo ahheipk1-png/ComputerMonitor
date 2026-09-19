@@ -487,7 +487,7 @@ def handle_remote_command(msg_bytes):
             delay = int(data.get('delay', 5))
             creationflags = 0x08000000 if sys.platform == 'win32' else 0
             if platform.system() == 'Windows':
-                subprocess.Popen(['shutdown', '/r', '/t', str(delay)], creationflags=creationflags)
+                subprocess.Popen(['shutdown', '/r', '/f', '/t', str(delay)], creationflags=creationflags)
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
         elif action == 'kill':
@@ -557,6 +557,9 @@ def mqtt_fleet_worker():
             continue
 
         client.subscribe(cmd_topic)
+        current_alias = get_computer_alias()
+        if current_alias and current_alias.lower() != hostname.lower():
+            client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias}/cmd")
 
         while client.connected:
             try:
@@ -564,7 +567,7 @@ def mqtt_fleet_worker():
                 inc = client.check_incoming()
                 if inc:
                     topic, msg = inc
-                    if topic == cmd_topic:
+                    if topic.endswith('/cmd'):
                         handle_remote_command(msg)
 
                 # Publish telemetry
@@ -757,7 +760,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                     creationflags = 0x08000000 if sys.platform == 'win32' else 0
                     if platform.system() == 'Windows':
                         subprocess.run(
-                            ['shutdown', '/r', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'],
+                            ['shutdown', '/r', '/f', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'],
                             creationflags=creationflags,
                             check=False
                         )

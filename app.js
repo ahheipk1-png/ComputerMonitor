@@ -654,14 +654,28 @@ async function requestStopProcess(identifier, isPid = true) {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
-  const sent = publishFleetCommand(cmdTopic, {
-    action: 'kill',
-    identifier: identifier,
-    val: identifier,
-    isPid: isPid
+  const targetHosts = Array.from(new Set([
+    node.rawHostname,
+    node.name,
+    node.hostname,
+    node.alias,
+    nodeAliases[node.id]
+  ].filter(h => h && typeof h === 'string' && h.trim())));
+
+  let anySent = false;
+  targetHosts.forEach(th => {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
+    if (publishFleetCommand(cmdTopic, {
+      action: 'kill',
+      identifier: identifier,
+      val: identifier,
+      isPid: isPid
+    })) {
+      anySent = true;
+    }
   });
-  if (sent) {
+
+  if (anySent) {
     showToast(`Stopping process [${identifier}] on [${dispName}]...`);
   }
 
@@ -720,12 +734,26 @@ async function executeRestartComputer() {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
-  const sent = publishFleetCommand(cmdTopic, {
-    action: 'restart',
-    delay: 5
+  const targetHosts = Array.from(new Set([
+    node.rawHostname,
+    node.name,
+    node.hostname,
+    node.alias,
+    nodeAliases[node.id]
+  ].filter(h => h && typeof h === 'string' && h.trim())));
+
+  let anySent = false;
+  targetHosts.forEach(th => {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
+    if (publishFleetCommand(cmdTopic, {
+      action: 'restart',
+      delay: 5
+    })) {
+      anySent = true;
+    }
   });
-  if (sent) {
+
+  if (anySent) {
     showToast(`🔄 Reboot signal dispatched to [${dispName}]...`);
     const alertBanner = document.getElementById('agent-alert-banner');
     const alertTitle = document.getElementById('alert-title');
