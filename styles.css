@@ -562,9 +562,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: linear-gradient(135deg, rgba(217, 119, 6, 0.15), rgba(225, 29, 72, 0.12));
-  border: 1px solid rgba(217, 119, 6, 0.4);
-  color: #fbbf24;
+  background: rgba(225, 29, 72, 0.1);
+  border: 1px solid rgba(225, 29, 72, 0.4);
+  color: #e11d48;
   font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 600;
@@ -576,10 +576,10 @@ body {
 }
 
 .btn-restart-pc:hover {
-  background: linear-gradient(135deg, #d97706, #e11d48);
+  background: #e11d48;
   color: #ffffff;
-  border-color: transparent;
-  box-shadow: 0 3px 12px rgba(217, 119, 6, 0.35);
+  border-color: #e11d48;
+  box-shadow: 0 3px 12px rgba(225, 29, 72, 0.35);
   transform: translateY(-1px);
 }
 
@@ -591,9 +591,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(217, 119, 6, 0.12);
-  border: 1px solid rgba(217, 119, 6, 0.35);
-  color: #fbbf24;
+  background: rgba(225, 29, 72, 0.1);
+  border: 1px solid rgba(225, 29, 72, 0.35);
+  color: #e11d48;
   font-family: var(--font-sans);
   font-size: 0.76rem;
   font-weight: 600;
@@ -604,10 +604,10 @@ body {
 }
 
 .btn-comp-restart:hover {
-  background: #d97706;
+  background: #e11d48;
   color: #ffffff;
-  border-color: #d97706;
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+  border-color: #e11d48;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.3);
 }
 
 /* ========================================================
