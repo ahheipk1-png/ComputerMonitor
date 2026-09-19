@@ -31,6 +31,26 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 AGENT_EXE_PATH = os.path.join(BASE_DIR, EXE_NAME)
+PROGRAM_DATA_DIR = os.path.join(os.environ.get('ProgramData', 'C:\\ProgramData'), 'ComputerMonitor')
+
+
+def is_admin():
+    """Check if current process has Windows Administrator privileges."""
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def get_config_dirs():
+    """Return directories to check for config files (ProgramData first for system-wide configs)."""
+    dirs = []
+    if os.path.isdir(PROGRAM_DATA_DIR):
+        dirs.append(PROGRAM_DATA_DIR)
+    if os.path.isdir(BASE_DIR) and BASE_DIR not in dirs:
+        dirs.append(BASE_DIR)
+    return dirs
 
 
 def get_local_ip():
@@ -106,18 +126,21 @@ def run_cmd_hidden(cmd_list):
 
 def get_fleet_id():
     """Retrieve or initialize persistent fleet identifier."""
-    fleet_file = os.path.join(BASE_DIR, 'fleet_id.txt')
-    if os.path.exists(fleet_file):
-        try:
-            with open(fleet_file, 'r', encoding='utf-8') as f:
-                val = f.read().strip()
-                if val:
-                    return val
-        except Exception:
-            pass
+    for d in get_config_dirs():
+        fleet_file = os.path.join(d, 'fleet_id.txt')
+        if os.path.exists(fleet_file):
+            try:
+                with open(fleet_file, 'r', encoding='utf-8') as f:
+                    val = f.read().strip()
+                    if val:
+                        return val
+            except Exception:
+                pass
     default_id = "ahheipk1"
+    target_dir = PROGRAM_DATA_DIR if os.path.isdir(PROGRAM_DATA_DIR) else BASE_DIR
     try:
-        with open(fleet_file, 'w', encoding='utf-8') as f:
+        os.makedirs(target_dir, exist_ok=True)
+        with open(os.path.join(target_dir, 'fleet_id.txt'), 'w', encoding='utf-8') as f:
             f.write(default_id)
     except Exception:
         pass
@@ -126,15 +149,16 @@ def get_fleet_id():
 
 def get_computer_alias():
     """Retrieve friendly computer alias name."""
-    alias_file = os.path.join(BASE_DIR, 'alias.txt')
-    if os.path.exists(alias_file):
-        try:
-            with open(alias_file, 'r', encoding='utf-8') as f:
-                val = f.read().strip()
-                if val:
-                    return val
-        except Exception:
-            pass
+    for d in get_config_dirs():
+        alias_file = os.path.join(d, 'alias.txt')
+        if os.path.exists(alias_file):
+            try:
+                with open(alias_file, 'r', encoding='utf-8') as f:
+                    val = f.read().strip()
+                    if val:
+                        return val
+            except Exception:
+                pass
     return platform.node()
 
 
@@ -298,13 +322,20 @@ class App(tk.Tk):
         # 2. Task Scheduler Check
         task_installed = False
         task_state = "Not Found"
-        out = run_cmd_hidden(["schtasks", "/query", "/tn", TASK_NAME, "/fo", "list"])
+        task_scope = "User"
+        out = run_cmd_hidden(["schtasks", "/query", "/tn", TASK_NAME, "/fo", "list", "/v"])
         if out.returncode == 0:
             task_installed = True
             task_state = "Ready"
             for line in out.stdout.splitlines():
                 if "Status:" in line:
                     task_state = line.split(":", 1)[1].strip()
+                elif "Run As User:" in line:
+                    u_val = line.split(":", 1)[1].strip()
+                    if "SYSTEM" in u_val.upper():
+                        task_scope = "All Accounts (SYSTEM)"
+                    else:
+                        task_scope = f"User ({u_val})"
 
         # 3. HTTP Port Check
         port_ok = False
@@ -318,12 +349,13 @@ class App(tk.Tk):
         except Exception:
             port_ok = False
 
-        return proc_running, pids, task_installed, task_state, port_ok, latency
+        return proc_running, pids, task_installed, task_state, task_scope, port_ok, latency
 
     def update_ui_status(self):
-        proc_running, pids, task_installed, task_state, port_ok, latency = self.check_system_status()
+        proc_running, pids, task_installed, task_state, task_scope, port_ok, latency = self.check_system_status()
         self.proc_running = proc_running
         self.task_installed = task_installed
+        self.task_scope = task_scope
 
         # Process UI
         if proc_running:
@@ -340,7 +372,10 @@ class App(tk.Tk):
         # Task UI
         if task_installed:
             self.lbl_task_dot.config(fg="#10b981")
-            self.lbl_task_status.config(text=f"INSTALLED ({task_state})", fg="#10b981")
+            task_text = f"ACTIVE ({task_state})"
+            if "SYSTEM" in task_scope or "ALL ACCOUNTS" in task_scope.upper():
+                task_text = f"{task_state.upper()} - ALL ACCOUNTS"
+            self.lbl_task_status.config(text=task_text, fg="#10b981")
             self.btn_install.config(state="disabled", bg="#334155")
             self.btn_uninstall.config(state="normal", bg="#475569")
         else:
@@ -423,32 +458,99 @@ class App(tk.Tk):
             messagebox.showerror("Agent Missing", f"Cannot find or download {EXE_NAME}.")
             return
 
-        self.log("Registering Windows Task Scheduler startup task...")
-        exe_to_register = AGENT_EXE_PATH
-        ps_cmd = (
-            f"$action = New-ScheduledTaskAction -Execute '{exe_to_register}' -Argument '--background'; "
-            f"$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
-            f"$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; "
-            f"$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; "
-            f"Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force; "
-            f"Start-ScheduledTask -TaskName '{TASK_NAME}'"
-        )
-        res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
-        if res.returncode == 0:
-            self.log("Startup task successfully installed and started!")
-            threading.Thread(target=lambda: (time.sleep(1.0), self.open_dashboard()), daemon=True).start()
-            messagebox.showinfo("Success", "Windows Startup Task successfully registered!\nYour computer is now synced to the website.")
+        self.log("Installing system-wide startup task for all accounts...")
+
+        dest_dir = PROGRAM_DATA_DIR
+        dest_agent = os.path.join(dest_dir, EXE_NAME)
+        src_agent = AGENT_EXE_PATH
+        src_fleet = os.path.join(BASE_DIR, 'fleet_id.txt')
+        src_alias = os.path.join(BASE_DIR, 'alias.txt')
+
+        # Elevated PowerShell installer script
+        ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$destDir = '{dest_dir}'
+if (!(Test-Path $destDir)) {{
+    New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+}}
+Copy-Item '{src_agent}' -Destination '{dest_agent}' -Force
+if (Test-Path '{src_fleet}') {{ Copy-Item '{src_fleet}' -Destination "$destDir\\fleet_id.txt" -Force }}
+if (Test-Path '{src_alias}') {{ Copy-Item '{src_alias}' -Destination "$destDir\\alias.txt" -Force }}
+
+Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue
+
+$action = New-ScheduledTaskAction -Execute '{dest_agent}' -Argument '--background' -WorkingDirectory $destDir
+$trigBoot = New-ScheduledTaskTrigger -AtStartup
+$trigLogon = New-ScheduledTaskTrigger -AtLogOn
+$principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 0) -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+
+Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $action -Trigger @($trigBoot, $trigLogon) -Principal $principal -Settings $settings -Force
+Start-ScheduledTask -TaskName '{TASK_NAME}'
+"""
+        if is_admin():
+            res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
         else:
-            self.log(f"Installation failed: {res.stderr}")
-            messagebox.showerror("Task Scheduler Error", res.stderr or "Failed to install task.")
+            temp_ps1 = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'cm_install_system_task.ps1')
+            try:
+                with open(temp_ps1, 'w', encoding='utf-8') as f:
+                    f.write(ps_script)
+                self.log("Requesting Administrator permission via UAC to register for all accounts...")
+                elevated_cmd = f"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{temp_ps1}\"' -Verb RunAs -Wait"
+                run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevated_cmd])
+                try:
+                    os.remove(temp_ps1)
+                except Exception:
+                    pass
+            except Exception as e:
+                self.log(f"Elevation error: {e}")
+
+        # Check result
+        verify = run_cmd_hidden(["schtasks", "/query", "/tn", TASK_NAME, "/fo", "list", "/v"])
+        if verify.returncode == 0:
+            is_sys = "SYSTEM" in verify.stdout.upper()
+            scope_str = "All Accounts (SYSTEM)" if is_sys else "Current User Account"
+            self.log(f"Startup task installed successfully! Scope: {scope_str}")
+            threading.Thread(target=lambda: (time.sleep(1.0), self.open_dashboard()), daemon=True).start()
+            messagebox.showinfo(
+                "Task Installed",
+                f"✅ Windows Startup Task Successfully Registered!\n\n"
+                f"• Scope: {scope_str}\n"
+                f"• Boot: Runs automatically at system startup and for ANY account\n"
+                f"• Resilient: 24/7 continuous background telemetry\n\n"
+                f"Your computer is now synced with the web dashboard."
+            )
+        else:
+            # Fallback if admin UAC was denied
+            if messagebox.askyesno("Administrator Permission Required", "Administrator elevation was not granted for an all-accounts system task.\n\nWould you like to install the task for your current user account instead?"):
+                user_ps = (
+                    f"$action = New-ScheduledTaskAction -Execute '{src_agent}' -Argument '--background'; "
+                    f"$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
+                    f"$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; "
+                    f"$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; "
+                    f"Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force; "
+                    f"Start-ScheduledTask -TaskName '{TASK_NAME}'"
+                )
+                res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", user_ps])
+                if res.returncode == 0:
+                    self.log("Task installed for current user account.")
+                    messagebox.showinfo("Installed", "Installed for current user account.\n(To enable all accounts, right-click ComputerMonitorControl.exe and select 'Run as administrator').")
+                else:
+                    self.log(f"Installation failed: {res.stderr}")
+                    messagebox.showerror("Error", res.stderr or "Failed to install task.")
+
         self.update_ui_status()
 
     def uninstall_task(self):
         if not messagebox.askyesno("Confirm Removal", "Do you want to remove the startup task from Windows Task Scheduler?"):
             return
         self.log("Removing startup task from Windows Task Scheduler...")
-        ps_cmd = f"Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue"
-        res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
+        ps_cmd = f"Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue; Stop-Process -Name '{EXE_NAME.replace('.exe', '')}' -Force -ErrorAction SilentlyContinue"
+        if is_admin():
+            res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
+        else:
+            elevated_cmd = f"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command \"{ps_cmd}\"' -Verb RunAs -Wait"
+            run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevated_cmd])
         self.log("Task removed.")
         self.update_ui_status()
 
@@ -524,15 +626,32 @@ class App(tk.Tk):
         if not new_alias:
             new_alias = platform.node()
             self.alias_val.set(new_alias)
-        alias_file = os.path.join(BASE_DIR, 'alias.txt')
-        try:
-            with open(alias_file, 'w', encoding='utf-8') as f:
-                f.write(new_alias)
+        saved = False
+        for d in (PROGRAM_DATA_DIR, BASE_DIR):
+            try:
+                os.makedirs(d, exist_ok=True)
+                with open(os.path.join(d, 'alias.txt'), 'w', encoding='utf-8') as f:
+                    f.write(new_alias)
+                saved = True
+            except Exception:
+                pass
+
+        if saved:
             self.log(f"Computer alias saved as: '{new_alias}'")
+            # Push immediately to local agent if listening
+            try:
+                req = urllib.request.Request(
+                    "http://127.0.0.1:5500/alias",
+                    data=json.dumps({"alias": new_alias}).encode('utf-8'),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req, timeout=1.0)
+            except Exception:
+                pass
             messagebox.showinfo("Alias Saved", f"Computer alias set to '{new_alias}'.\nTelemetry updates will now broadcast this name.")
-        except Exception as e:
-            self.log(f"Failed to save alias: {e}")
-            messagebox.showerror("Save Error", f"Could not save alias: {e}")
+        else:
+            self.log(f"Failed to save alias to disk.")
+            messagebox.showerror("Save Error", "Could not write alias to disk.")
 
 
 def main():

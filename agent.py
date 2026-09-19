@@ -25,6 +25,47 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+PROGRAM_DATA_DIR = os.path.join(os.environ.get('ProgramData', 'C:\\ProgramData'), 'ComputerMonitor')
+
+
+def get_config_dirs():
+    """Return directories to check for config files (ProgramData first for system-wide configs)."""
+    dirs = []
+    if os.path.isdir(PROGRAM_DATA_DIR):
+        dirs.append(PROGRAM_DATA_DIR)
+    if os.path.isdir(BASE_DIR) and BASE_DIR not in dirs:
+        dirs.append(BASE_DIR)
+    return dirs
+
+
+def ensure_single_instance():
+    """Ensure only one instance of ComputerMonitorAgent runs system-wide."""
+    try:
+        # 1. Quick loopback probe: if port 5500 is already responding, an agent is active
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.4)
+        try:
+            s.connect(('127.0.0.1', PORT))
+            s.close()
+            return False, None
+        except Exception:
+            s.close()
+
+        # 2. Windows Global Named Mutex across all user sessions and Session 0 (SYSTEM)
+        if sys.platform == 'win32':
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            mutex = kernel32.CreateMutexW(None, False, "Global\\ComputerMonitorAgent_SingleInstance_Mutex")
+            last_error = kernel32.GetLastError()
+            # 183 = ERROR_ALREADY_EXISTS, 5 = ERROR_ACCESS_DENIED (owned by SYSTEM)
+            if last_error in (183, 5):
+                return False, mutex
+            return True, mutex
+        return True, None
+    except Exception:
+        return True, None
+
+
 if hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -108,14 +149,23 @@ def check_task_scheduler():
         return {"installed": True, "status": "Non-Windows OS"}
     try:
         creationflags = 0x08000000 # CREATE_NO_WINDOW
-        out = subprocess.run(['schtasks', '/query', '/tn', 'ComputerMonitorAgent', '/fo', 'list'],
+        out = subprocess.run(['schtasks', '/query', '/tn', 'ComputerMonitorAgent', '/fo', 'list', '/v'],
                              capture_output=True, text=True, timeout=2, creationflags=creationflags)
         if out.returncode == 0:
             status = "Ready / Running"
+            task_user = ""
             for line in out.stdout.splitlines():
                 if "Status:" in line:
                     status = line.split(":", 1)[1].strip()
-            return {"installed": True, "status": status}
+                elif "Run As User:" in line:
+                    task_user = line.split(":", 1)[1].strip()
+            is_system = "SYSTEM" in task_user.upper()
+            return {
+                "installed": True,
+                "status": f"{status} (All Accounts)" if is_system else status,
+                "all_accounts": is_system,
+                "user": task_user
+            }
         return {"installed": False, "status": "Task Not Found / Deleted"}
     except Exception:
         return {"installed": False, "status": "Unavailable"}
@@ -123,15 +173,16 @@ def check_task_scheduler():
 
 def get_computer_alias():
     """Retrieve friendly computer alias name."""
-    alias_file = os.path.join(BASE_DIR, 'alias.txt')
-    if os.path.exists(alias_file):
-        try:
-            with open(alias_file, 'r', encoding='utf-8') as f:
-                val = f.read().strip()
-                if val:
-                    return val
-        except Exception:
-            pass
+    for d in get_config_dirs():
+        alias_file = os.path.join(d, 'alias.txt')
+        if os.path.exists(alias_file):
+            try:
+                with open(alias_file, 'r', encoding='utf-8') as f:
+                    val = f.read().strip()
+                    if val:
+                        return val
+            except Exception:
+                pass
     return platform.node()
 
 
@@ -406,18 +457,21 @@ class PureMqttClient:
 
 def get_fleet_id():
     """Retrieve or initialize persistent fleet identifier."""
-    fleet_file = os.path.join(BASE_DIR, 'fleet_id.txt')
-    if os.path.exists(fleet_file):
-        try:
-            with open(fleet_file, 'r', encoding='utf-8') as f:
-                val = f.read().strip()
-                if val:
-                    return val
-        except Exception:
-            pass
+    for d in get_config_dirs():
+        fleet_file = os.path.join(d, 'fleet_id.txt')
+        if os.path.exists(fleet_file):
+            try:
+                with open(fleet_file, 'r', encoding='utf-8') as f:
+                    val = f.read().strip()
+                    if val:
+                        return val
+            except Exception:
+                pass
     default_id = "ahheipk1"
+    target_dir = PROGRAM_DATA_DIR if os.path.isdir(PROGRAM_DATA_DIR) else BASE_DIR
     try:
-        with open(fleet_file, 'w', encoding='utf-8') as f:
+        os.makedirs(target_dir, exist_ok=True)
+        with open(os.path.join(target_dir, 'fleet_id.txt'), 'w', encoding='utf-8') as f:
             f.write(default_id)
     except Exception:
         pass
@@ -454,14 +508,15 @@ def handle_remote_command(msg_bytes):
                         pass
         elif action == 'set_alias':
             new_alias = str(data.get('alias') or '').strip()
-            alias_file = os.path.join(BASE_DIR, 'alias.txt')
-            try:
-                with open(alias_file, 'w', encoding='utf-8') as f:
-                    f.write(new_alias)
-                with METRICS_LOCK:
-                    LATEST_METRICS['alias'] = new_alias or platform.node()
-            except Exception:
-                pass
+            for d in (PROGRAM_DATA_DIR, BASE_DIR):
+                try:
+                    os.makedirs(d, exist_ok=True)
+                    with open(os.path.join(d, 'alias.txt'), 'w', encoding='utf-8') as f:
+                        f.write(new_alias)
+                except Exception:
+                    pass
+            with METRICS_LOCK:
+                LATEST_METRICS['alias'] = new_alias or platform.node()
     except Exception:
         pass
 
@@ -740,9 +795,13 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(length).decode('utf-8') if length > 0 else ''
                 data = json.loads(body) if body else {}
                 new_alias = str(data.get('alias') or '').strip()
-                alias_file = os.path.join(BASE_DIR, 'alias.txt')
-                with open(alias_file, 'w', encoding='utf-8') as f:
-                    f.write(new_alias)
+                for d in (PROGRAM_DATA_DIR, BASE_DIR):
+                    try:
+                        os.makedirs(d, exist_ok=True)
+                        with open(os.path.join(d, 'alias.txt'), 'w', encoding='utf-8') as f:
+                            f.write(new_alias)
+                    except Exception:
+                        pass
                 with METRICS_LOCK:
                     LATEST_METRICS['alias'] = new_alias or platform.node()
                 self.send_response(200)
@@ -842,6 +901,13 @@ def auto_open_browser():
 
 
 def main():
+    is_primary, mutex_handle = ensure_single_instance()
+    if not is_primary:
+        # Agent is already running system-wide (e.g. as a service or under another logged-in account)
+        if '--background' not in sys.argv and '--no-browser' not in sys.argv:
+            auto_open_browser()
+        sys.exit(0)
+
     lan_ip = get_local_ip()
     fleet = get_fleet_id()
     print("=" * 65)
