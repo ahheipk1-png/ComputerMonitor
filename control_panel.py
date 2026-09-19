@@ -24,8 +24,12 @@ TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
 
-# Base directory where files live
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Base directory where files live (handle PyInstaller frozen mode)
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 AGENT_EXE_PATH = os.path.join(BASE_DIR, EXE_NAME)
 
 
@@ -227,14 +231,16 @@ class App(tk.Tk):
         t.start()
 
     def start_agent(self):
-        target = AGENT_EXE_PATH if os.path.exists(AGENT_EXE_PATH) else os.path.join(BASE_DIR, "agent.py")
-        self.log(f"Starting agent from {os.path.basename(target)}...")
+        target = AGENT_EXE_PATH
+        if not os.path.exists(target):
+            self.log(f"Error: {EXE_NAME} not found in {BASE_DIR}")
+            messagebox.showerror("File Not Found", f"Cannot find {EXE_NAME} in:\n{BASE_DIR}")
+            return
+
+        self.log(f"Starting agent: {os.path.basename(target)}...")
         try:
-            if target.endswith(".exe"):
-                subprocess.Popen([target, "--background"], cwd=BASE_DIR, creationflags=0x08000000)
-            else:
-                subprocess.Popen([sys.executable, target, "--background"], cwd=BASE_DIR, creationflags=0x08000000)
-            self.log("Agent process launched.")
+            subprocess.Popen([target, "--background"], cwd=BASE_DIR, creationflags=0x08000000)
+            self.log("Agent process launched silently.")
             time.sleep(0.5)
             self.update_ui_status()
         except Exception as e:
