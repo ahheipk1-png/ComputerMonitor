@@ -60,14 +60,14 @@
           <h3>Connected Computers (<span id="fleet-count">3</span>)</h3>
         </div>
         <div class="fleet-actions-group" style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn-download-agent" id="btn-open-download-modal" title="Download monitor agent for another computer">
+          <a href="ComputerMonitorControl.exe" download class="btn-download-agent" id="btn-download-gui" title="Download Standalone Desktop GUI (No installation needed)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>Download Agent (.exe / .zip)</span>
-          </button>
+            <span>Download Desktop GUI</span>
+          </a>
           <button class="btn-add-node" id="btn-add-node">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -490,7 +490,7 @@
       <div class="footer-links">
         <a href="https://github.com/ahheipk1-png/ComputerMonitor" target="_blank" rel="noopener">GitHub Repository</a>
         <span>&bull;</span>
-        <a href="#download-agent" id="btn-footer-download">📥 Download Agent (.exe / .zip)</a>
+        <a href="ComputerMonitorControl.exe" download id="btn-footer-download">📥 Download Desktop GUI (.exe)</a>
         <span>&bull;</span>
         <a href="#agent-help" id="btn-agent-help">Setup Guide</a>
       </div>
@@ -508,9 +508,9 @@
         <div class="add-node-intro-banner">
           <div class="intro-banner-icon">📥</div>
           <div class="intro-banner-text">
-            <strong>Need the monitor agent for that PC?</strong>
-            <p>Download the standalone <code>.exe</code> or 1-click <code>.bat</code> installer to run on that computer.</p>
-            <a href="#download-agent" id="link-modal-open-download" class="btn-download-inline">Download Agent Files (.exe / .zip / .bat) &rarr;</a>
+            <strong>Need to monitor another computer?</strong>
+            <p>Download and run the Desktop GUI on that computer. It shows that PC's exact URL to connect here!</p>
+            <a href="ComputerMonitorControl.exe" download class="btn-download-inline">📥 Download Desktop GUI (.exe)</a>
           </div>
         </div>
 
@@ -544,102 +544,6 @@
     </div>
   </div>
 
-  <!-- Download Agent Modal -->
-  <div class="modal-overlay" id="download-agent-modal">
-    <div class="modal-content download-modal-content">
-      <div class="modal-header">
-        <div class="modal-title-group" style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 1.3rem;">📥</span>
-          <h3 style="margin: 0;">Download Monitor Agent for Another Computer</h3>
-        </div>
-        <button class="modal-close" id="download-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.2rem; line-height: 1.5;">
-          To monitor another computer on your home/office Wi-Fi, LAN, or VPN, download and run the agent on that PC. Choose your preferred download option:
-        </p>
-
-        <div class="dl-options-grid">
-          <!-- Option 1: Complete Windows Package -->
-          <div class="dl-card dl-card-featured">
-            <div class="dl-badge">RECOMMENDED</div>
-            <div class="dl-card-icon">📦</div>
-            <h4>Complete Windows Package (.zip)</h4>
-            <p>All-in-one package: Silent Background Agent, Desktop GUI Control Center, Auto-Startup Installer, and Easy Start/Stop scripts.</p>
-            <ul class="dl-features-list">
-              <li>✅ <code>ComputerMonitorAgent.exe</code> (Silent agent)</li>
-              <li>✅ <code>ComputerMonitorControl.exe</code> (Desktop GUI)</li>
-              <li>✅ <code>install-startup-task.bat</code> (Boot with Windows)</li>
-              <li>✅ <code>install-remote.bat</code> (1-click installer)</li>
-            </ul>
-            <a href="ComputerMonitor-Agent-Windows.zip" download class="btn-dl-action btn-dl-primary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Download Complete ZIP (20 MB)</span>
-            </a>
-          </div>
-
-          <!-- Option 2: Standalone Agent .exe -->
-          <div class="dl-card">
-            <div class="dl-card-icon">⚡</div>
-            <h4>Standalone Silent Agent (.exe)</h4>
-            <p>Single windowless binary. Double-click to run silently in the background with zero visible console windows (&lt;0.2% CPU).</p>
-            <ul class="dl-features-list">
-              <li>✅ 100% Windowless & Silent</li>
-              <li>✅ No installation or Python needed</li>
-              <li>✅ Exposes metrics on Port 5500</li>
-            </ul>
-            <a href="ComputerMonitorAgent.exe" download class="btn-dl-action btn-dl-secondary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Download Agent.exe (8.9 MB)</span>
-            </a>
-          </div>
-
-          <!-- Option 3: Remote Auto-Installer -->
-          <div class="dl-card">
-            <div class="dl-card-icon">🚀</div>
-            <h4>Quick Remote Installer (.bat)</h4>
-            <p>Lightweight 1KB batch script. Automatically downloads the agent directly from this website and prints that computer's IP address.</p>
-            <ul class="dl-features-list">
-              <li>✅ Instant 1-second download</li>
-              <li>✅ Auto-launches silent agent</li>
-              <li>✅ Prints exact IP to enter on website</li>
-            </ul>
-            <a href="install-remote.bat" download class="btn-dl-action btn-dl-secondary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Download install-remote.bat (1 KB)</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- Quick Terminal Command -->
-        <div class="cmd-copy-box">
-          <div class="cmd-copy-header">
-            <span>Or Run in PowerShell on the Other Computer:</span>
-            <button type="button" class="btn-copy-cmd" id="btn-copy-ps-cmd">📋 Copy Command</button>
-          </div>
-          <code id="ps-cmd-text">curl -L -o install-remote.bat https://computermonitor.pages.dev/install-remote.bat; .\install-remote.bat</code>
-        </div>
-
-        <!-- 3 Simple Setup Steps -->
-        <div class="dl-steps-box">
-          <h5>How to connect the other computer to this dashboard:</h5>
-          <div class="dl-step-item">
-            <span class="dl-step-badge">1</span>
-            <span>Run <strong>ComputerMonitorAgent.exe</strong> or <strong>install-remote.bat</strong> on that computer.</span>
-          </div>
-          <div class="dl-step-item">
-            <span class="dl-step-badge">2</span>
-            <span>Check that computer's local IP address (e.g. <code>192.168.1.50</code>).</span>
-          </div>
-          <div class="dl-step-item">
-            <span class="dl-step-badge">3</span>
-            <span>Click <strong>"Add Computer"</strong> here on this dashboard, enter <code>http://&lt;IP&gt;:5500</code>, and watch live stats stream!</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Agent Info Modal -->
   <div class="modal-overlay" id="agent-modal">
     <div class="modal-content">
@@ -652,10 +556,9 @@
         
         <div style="margin: 14px 0;">
           <h4 style="font-size: 0.9rem; color: var(--cyan); margin-bottom: 6px;">Windows Computers (No Python Needed):</h4>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">Download and run the standalone agent executable or zip package:</p>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">Download and open the Desktop GUI. It starts the background telemetry agent automatically and shows your computer's URL to connect here:</p>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <a href="ComputerMonitor-Agent-Windows.zip" download class="btn-dl-action btn-dl-primary" style="padding: 6px 12px; font-size: 0.78rem;">📦 Download ZIP (20 MB)</a>
-            <a href="ComputerMonitorAgent.exe" download class="btn-dl-action btn-dl-secondary" style="padding: 6px 12px; font-size: 0.78rem;">⚡ Download Agent.exe (8.9 MB)</a>
+            <a href="ComputerMonitorControl.exe" download class="btn-dl-action btn-dl-primary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Download Desktop GUI (ComputerMonitorControl.exe)</a>
           </div>
         </div>
 

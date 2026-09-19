@@ -33,6 +33,43 @@ else:
 AGENT_EXE_PATH = os.path.join(BASE_DIR, EXE_NAME)
 
 
+def get_local_ip():
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '127.0.0.1'
+
+
+def ensure_agent_exe():
+    """Ensure ComputerMonitorAgent.exe is available in BASE_DIR."""
+    if os.path.exists(AGENT_EXE_PATH):
+        return True
+
+    # 1. Try extracting from PyInstaller bundle
+    if hasattr(sys, '_MEIPASS'):
+        bundled = os.path.join(sys._MEIPASS, EXE_NAME)
+        if os.path.exists(bundled):
+            try:
+                import shutil
+                shutil.copy2(bundled, AGENT_EXE_PATH)
+                return True
+            except Exception:
+                pass
+
+    # 2. Try downloading from website
+    try:
+        url = f"{DASHBOARD_URL}/{EXE_NAME}"
+        urllib.request.urlretrieve(url, AGENT_EXE_PATH)
+        return os.path.exists(AGENT_EXE_PATH)
+    except Exception:
+        return False
+
+
 def run_cmd_hidden(cmd_list):
     """Run command without popping up any command prompt window."""
     flags = 0x08000000 if sys.platform == 'win32' else 0
@@ -100,6 +137,16 @@ class App(tk.Tk):
         tk.Label(row3, text="Port 5500 Endpoint:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
         self.lbl_port_status = tk.Label(row3, text="Offline", font=("Segoe UI", 9), fg="#94a3b8", bg="#1e293b")
         self.lbl_port_status.pack(side="left", padx=(18, 0))
+
+        # 4. Local IP for Website
+        row4 = tk.Frame(status_box, bg="#1e293b")
+        row4.pack(fill="x", pady=4)
+        tk.Label(row4, text="Add to Website:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
+        self.my_url = f"http://{get_local_ip()}:5500"
+        self.lbl_endpoint = tk.Label(row4, text=self.my_url, font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", cursor="hand2")
+        self.lbl_endpoint.pack(side="left", padx=(18, 4))
+        self.lbl_endpoint.bind("<Button-1>", lambda e: self.copy_url_to_clipboard())
+        tk.Label(row4, text="(click to copy)", font=("Segoe UI", 8), fg="#64748b", bg="#1e293b").pack(side="left")
 
         # Actions Section
         actions_box = tk.LabelFrame(body_frame, text=" Actions & Controls ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=14, pady=12, bd=1, relief="solid")
@@ -250,13 +297,22 @@ class App(tk.Tk):
         t = threading.Thread(target=loop, daemon=True)
         t.start()
 
+    def copy_url_to_clipboard(self):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self.my_url)
+            self.log(f"Copied {self.my_url} to clipboard!")
+            messagebox.showinfo("Copied", f"Copied to clipboard:\n{self.my_url}\n\nPaste this into 'Add Computer' on the website dashboard.")
+        except Exception:
+            pass
+
     def start_agent(self):
-        target = AGENT_EXE_PATH
-        if not os.path.exists(target):
-            self.log(f"Error: {EXE_NAME} not found in {BASE_DIR}")
-            messagebox.showerror("File Not Found", f"Cannot find {EXE_NAME} in:\n{BASE_DIR}")
+        if not ensure_agent_exe():
+            self.log(f"Error: {EXE_NAME} not found and could not be retrieved.")
+            messagebox.showerror("Agent Missing", f"Cannot find or download {EXE_NAME}.")
             return
 
+        target = AGENT_EXE_PATH
         self.log(f"Starting agent: {os.path.basename(target)}...")
         try:
             subprocess.Popen([target, "--background"], cwd=BASE_DIR, creationflags=0x08000000)
@@ -281,6 +337,11 @@ class App(tk.Tk):
             self.log(f"Error stopping agent: {e}")
 
     def install_task(self):
+        if not ensure_agent_exe():
+            self.log(f"Error: {EXE_NAME} not found and could not be retrieved.")
+            messagebox.showerror("Agent Missing", f"Cannot find or download {EXE_NAME}.")
+            return
+
         self.log("Registering Windows Task Scheduler startup task...")
         exe_to_register = AGENT_EXE_PATH
         ps_cmd = (
