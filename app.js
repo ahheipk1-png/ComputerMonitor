@@ -303,6 +303,67 @@ function setRadialGauge(elementId, percent) {
   circle.style.strokeDashoffset = offset;
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    switch (m) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#039;';
+    }
+  });
+}
+
+function showToast(message, isError = false) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${isError ? 'toast-error' : 'toast-success'}`;
+  toast.innerHTML = `<span>${isError ? '❌' : '✅'}</span> <span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+async function requestStopProcess(identifier, isPid = true) {
+  const node = getActiveNode();
+  if (node.status !== 'online') {
+    showToast(`Cannot stop process: Computer [${node.name}] is offline.`, true);
+    return;
+  }
+
+  const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+  const killUrl = `${baseUrl}/kill`;
+  const payload = isPid ? { pid: parseInt(identifier, 10) } : { name: identifier.trim() };
+
+  try {
+    const res = await fetch(killUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(4500)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'Process stopped successfully!');
+      // Trigger instant poll to update process list immediately
+      pollRealFleet();
+    } else {
+      showToast(data.error || 'Failed to stop process.', true);
+    }
+  } catch (err) {
+    showToast(`Error communicating with agent: ${err.message}`, true);
+  }
+}
+
 // Render Real Processes
 function renderProcesses() {
   const node = getActiveNode();
@@ -321,7 +382,7 @@ function renderProcesses() {
   if (!procs.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-dim);">
+        <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-dim);">
           ${node.status === 'online' ? 'No processes to display.' : '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.'}
         </td>
       </tr>
@@ -335,12 +396,17 @@ function renderProcesses() {
       <td>${p.pid}</td>
       <td class="proc-name-cell">
         <span class="proc-icon"></span>
-        <span>${p.name}</span>
+        <span style="font-weight: 500;">${escapeHtml(p.name)}</span>
       </td>
       <td class="font-mono ${p.cpu > 15 ? 'text-amber' : ''}">${p.cpu.toFixed(1)}%</td>
       <td class="font-mono">${p.mem > 1024 ? (p.mem / 1024).toFixed(2) + ' GB' : p.mem + ' MB'}</td>
-      <td class="font-mono">${p.io}</td>
-      <td><span class="status-badge ${p.status === 'running' ? 'running' : 'sleeping'}">${p.status}</span></td>
+      <td class="font-mono">${escapeHtml(p.io)}</td>
+      <td><span class="status-badge ${p.status === 'running' ? 'running' : 'sleeping'}">${escapeHtml(p.status)}</span></td>
+      <td style="text-align: right;">
+        <button class="btn-kill-row" data-pid="${p.pid}" data-name="${escapeHtml(p.name)}" title="Stop process ${escapeHtml(p.name)} (PID: ${p.pid})">
+          <span>⏹ Stop</span>
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -628,6 +694,71 @@ function setupEvents() {
   if (btnCloseAgent) {
     btnCloseAgent.addEventListener('click', () => {
       agentModal.classList.remove('active');
+    });
+  }
+
+  // Process Table Stop Button Event Delegation
+  const procTbody = document.getElementById('proc-table-body');
+  if (procTbody) {
+    procTbody.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-kill-row');
+      if (!btn) return;
+      const pid = btn.dataset.pid;
+      const name = btn.dataset.name;
+      if (confirm(`Are you sure you want to STOP process [${name}] (PID: ${pid})?`)) {
+        requestStopProcess(pid, true);
+      }
+    });
+  }
+
+  // Stop Process Modal
+  const killModal = document.getElementById('kill-proc-modal');
+  const btnOpenKillModal = document.getElementById('btn-open-kill-modal');
+  const btnCloseKillModal = document.getElementById('kill-modal-close');
+  const btnCancelKill = document.getElementById('btn-cancel-kill');
+  const killForm = document.getElementById('kill-proc-form');
+  const killInput = document.getElementById('kill-input-val');
+  const killHint = document.getElementById('kill-input-hint');
+  const killTargetNode = document.getElementById('kill-target-node');
+  const killRadios = document.querySelectorAll('input[name="kill-mode"]');
+
+  if (btnOpenKillModal) {
+    btnOpenKillModal.addEventListener('click', () => {
+      const node = getActiveNode();
+      if (killTargetNode) killTargetNode.textContent = node.name;
+      if (killInput) killInput.value = '';
+      killModal.classList.add('active');
+      if (killInput) killInput.focus();
+    });
+  }
+
+  if (btnCloseKillModal) {
+    btnCloseKillModal.addEventListener('click', () => killModal.classList.remove('active'));
+  }
+  if (btnCancelKill) {
+    btnCancelKill.addEventListener('click', () => killModal.classList.remove('active'));
+  }
+
+  killRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.value === 'pid') {
+        killInput.placeholder = 'e.g. 1234';
+        killHint.textContent = 'Enter the numeric PID of the process to stop.';
+      } else {
+        killInput.placeholder = 'e.g. notepad.exe or chrome.exe';
+        killHint.textContent = 'Enter the executable name of the process to stop.';
+      }
+    });
+  });
+
+  if (killForm) {
+    killForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = killInput.value.trim();
+      if (!val) return;
+      const isPid = document.querySelector('input[name="kill-mode"]:checked')?.value === 'pid';
+      killModal.classList.remove('active');
+      requestStopProcess(val, isPid);
     });
   }
 

@@ -43,7 +43,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("ComputerMonitor Control Center")
-        self.geometry("480x560")
+        self.geometry("480x640")
         self.resizable(False, False)
         self.configure(bg="#0f172a")
 
@@ -128,6 +128,22 @@ class App(tk.Tk):
         # Open Dashboard Button
         btn_dash = tk.Button(actions_box, text="🌐 Open Website Dashboard", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=lambda: webbrowser.open(DASHBOARD_URL))
         btn_dash.pack(fill="x", pady=(8, 0))
+
+        # Stop Specific Process Section
+        kill_box = tk.LabelFrame(body_frame, text=" Stop Specific Process ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=12, pady=10, bd=1, relief="solid")
+        kill_box.pack(fill="x", pady=(0, 14))
+
+        kill_frame = tk.Frame(kill_box, bg="#1e293b")
+        kill_frame.pack(fill="x")
+
+        tk.Label(kill_frame, text="PID or Name:", font=("Segoe UI", 9), fg="#cbd5e1", bg="#1e293b").pack(side="left", padx=(0, 6))
+
+        self.ent_kill = tk.Entry(kill_frame, font=("Segoe UI", 9), bg="#0f172a", fg="#ffffff", insertbackground="#ffffff", bd=1, relief="solid")
+        self.ent_kill.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=3)
+        self.ent_kill.bind("<Return>", lambda e: self.terminate_custom_process())
+
+        btn_kill = tk.Button(kill_frame, text="🛑 Stop", font=("Segoe UI", 9, "bold"), bg="#be123c", fg="#ffffff", activebackground="#9f1239", activeforeground="#ffffff", relief="flat", padx=12, pady=4, cursor="hand2", command=self.terminate_custom_process)
+        btn_kill.pack(side="right")
 
         # Activity Log / Output Console
         log_box = tk.LabelFrame(body_frame, text=" Activity Log ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=10, pady=8, bd=1, relief="solid")
@@ -288,6 +304,73 @@ class App(tk.Tk):
         res = run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd])
         self.log("Task removed.")
         self.update_ui_status()
+
+    def terminate_custom_process(self):
+        val = self.ent_kill.get().strip()
+        if not val:
+            messagebox.showwarning("Input Required", "Please enter a Process Name (e.g. notepad.exe) or a numeric PID.")
+            return
+
+        PROTECTED = {
+            'system', 'system idle process', 'registry', 'smss.exe', 'csrss.exe',
+            'wininit.exe', 'services.exe', 'lsass.exe', 'svchost.exe', 'fontdrvhost.exe',
+            'winlogon.exe', 'dwm.exe'
+        }
+
+        if val.lower() in PROTECTED:
+            messagebox.showerror("Protected Process", f"Cannot terminate critical Windows system process '{val}'.")
+            return
+
+        if not messagebox.askyesno("Confirm Termination", f"Are you sure you want to stop process '{val}'?"):
+            return
+
+        self.log(f"Stopping process '{val}'...")
+        try:
+            # If numeric PID
+            if val.isdigit():
+                pid = int(val)
+                p = psutil.Process(pid)
+                pname = p.name()
+                if pname.lower() in PROTECTED:
+                    messagebox.showerror("Protected", f"Process {pname} (PID {pid}) is a protected system process.")
+                    return
+                p.terminate()
+                try:
+                    p.wait(timeout=1.0)
+                except psutil.TimeoutExpired:
+                    p.kill()
+                self.log(f"Successfully stopped '{pname}' (PID {pid}).")
+                messagebox.showinfo("Stopped", f"Successfully stopped '{pname}' (PID {pid}).")
+            else:
+                target = val.lower()
+                killed = []
+                for p in psutil.process_iter(['pid', 'name']):
+                    try:
+                        pname = (p.info['name'] or '').lower()
+                        if pname == target or pname == f"{target}.exe":
+                            if p.info['pid'] not in (0, 4) and p.info['pid'] != os.getpid():
+                                proc_obj = psutil.Process(p.info['pid'])
+                                proc_obj.terminate()
+                                try:
+                                    proc_obj.wait(timeout=0.8)
+                                except psutil.TimeoutExpired:
+                                    proc_obj.kill()
+                                killed.append(p.info['pid'])
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+
+                if killed:
+                    self.log(f"Stopped {len(killed)} process(es) matching '{val}' (PIDs: {', '.join(map(str, killed))}).")
+                    messagebox.showinfo("Stopped", f"Successfully stopped {len(killed)} process(es) matching '{val}'.")
+                else:
+                    self.log(f"No running process found matching '{val}'.")
+                    messagebox.showwarning("Not Found", f"No running process found matching '{val}'.")
+
+            self.ent_kill.delete(0, "end")
+            self.update_ui_status()
+        except Exception as e:
+            self.log(f"Error terminating process: {e}")
+            messagebox.showerror("Termination Error", str(e))
 
 
 def main():

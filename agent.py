@@ -29,6 +29,13 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
+# Critical Windows & System processes protected from accidental termination
+PROTECTED_PROCESSES = {
+    'system', 'system idle process', 'registry', 'smss.exe', 'csrss.exe',
+    'wininit.exe', 'services.exe', 'lsass.exe', 'svchost.exe', 'fontdrvhost.exe',
+    'winlogon.exe', 'dwm.exe', 'computermonitoragent.exe'
+}
+
 # Global thread-safe metrics cache
 LATEST_METRICS = {
     'hostname': platform.node(),
@@ -176,7 +183,7 @@ def background_metrics_collector():
 class MetricsHandler(http.server.BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
@@ -186,6 +193,119 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/kill':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                data = json.loads(body) if body else {}
+
+                pid = data.get('pid')
+                proc_name = data.get('name')
+
+                if not HAS_PSUTIL:
+                    self.send_response(500)
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': False, 'error': 'psutil not installed on agent'}).encode('utf-8'))
+                    return
+
+                # Option 1: Stop by PID
+                if pid is not None:
+                    try:
+                        pid = int(pid)
+                    except ValueError:
+                        self.send_response(400)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': 'Invalid PID'}).encode('utf-8'))
+                        return
+
+                    if pid in (0, 4) or pid == os.getpid():
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': 'Cannot terminate Windows system kernel or agent PID'}).encode('utf-8'))
+                        return
+
+                    try:
+                        p = psutil.Process(pid)
+                        name = p.name()
+                        if name.lower() in PROTECTED_PROCESSES:
+                            self.send_response(200)
+                            self.end_headers()
+                            self.wfile.write(json.dumps({'success': False, 'error': f"Terminating critical OS process '{name}' is protected"}).encode('utf-8'))
+                            return
+
+                        p.terminate()
+                        try:
+                            p.wait(timeout=1.0)
+                        except psutil.TimeoutExpired:
+                            p.kill()
+
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': True, 'message': f"Process '{name}' (PID {pid}) stopped successfully"}).encode('utf-8'))
+                        return
+                    except psutil.NoSuchProcess:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': f"Process with PID {pid} not found (already stopped)"}).encode('utf-8'))
+                        return
+                    except psutil.AccessDenied:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': f"Access denied stopping PID {pid}. Elevated permissions required."}).encode('utf-8'))
+                        return
+
+                # Option 2: Stop by process name
+                elif proc_name:
+                    target_name = proc_name.strip().lower()
+                    if target_name in PROTECTED_PROCESSES:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': f"Process '{proc_name}' is a protected Windows system process"}).encode('utf-8'))
+                        return
+
+                    killed = []
+                    failed = []
+                    for p in psutil.process_iter(['pid', 'name']):
+                        try:
+                            pname = (p.info['name'] or '').lower()
+                            if pname == target_name or pname == f"{target_name}.exe":
+                                if p.info['pid'] not in (0, 4) and p.info['pid'] != os.getpid():
+                                    proc_obj = psutil.Process(p.info['pid'])
+                                    proc_obj.terminate()
+                                    try:
+                                        proc_obj.wait(timeout=0.8)
+                                    except psutil.TimeoutExpired:
+                                        proc_obj.kill()
+                                    killed.append(p.info['pid'])
+                        except (psutil.NoSuchProcess, psutil.AccessDenied) as err:
+                            failed.append(str(err))
+
+                    if killed:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': True, 'message': f"Stopped {len(killed)} process(es) matching '{proc_name}' (PIDs: {', '.join(map(str, killed))})"}).encode('utf-8'))
+                    else:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'success': False, 'error': f"No running processes found matching '{proc_name}'"}).encode('utf-8'))
+                    return
+
+                else:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': False, 'error': 'Must provide either "pid" or "name" in JSON payload'}).encode('utf-8'))
+                    return
+
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Not Found'}).encode('utf-8'))
 
     def do_GET(self):
         if self.path == '/metrics' or self.path == '/':
