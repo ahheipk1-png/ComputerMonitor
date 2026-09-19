@@ -124,10 +124,18 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         return
 
 
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+
 def main():
     lan_ip = get_local_ip()
     print("=" * 65)
-    print(" 🖥️  ComputerMonitor Hardware Agent (Multi-Machine Edition)")
+    print(" [COMPUTER MONITOR] Hardware Telemetry Agent (Multi-Machine Edition)")
     print("=" * 65)
     print(f"[*] Computer Name : {platform.node()}")
     print(f"[*] Platform      : {platform.system()} {platform.release()} ({platform.machine()})")
