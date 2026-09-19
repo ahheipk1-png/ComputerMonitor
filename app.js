@@ -533,22 +533,12 @@ function updateActiveNodeBanner() {
       metaScheduler.className = 'meta-val text-rose';
     }
   } else {
+    // Node is actively ONLINE
     const sched = node.taskScheduler;
-    if (sched && !sched.installed) {
-      if (alertBanner) alertBanner.style.display = 'flex';
-      if (alertTitle) alertTitle.textContent = 'TASK SCHEDULER TASK DELETED';
-      if (alertDesc) alertDesc.textContent = `Warning: The Windows Scheduled Task 'ComputerMonitorAgent' was deleted on ${node.name}. Run install-startup-task.bat to restore it.`;
-      if (alertLastSeen) alertLastSeen.textContent = 'Warning Alert';
-      if (metaScheduler) {
-        metaScheduler.textContent = 'TASK DELETED';
-        metaScheduler.className = 'meta-val text-rose';
-      }
-    } else {
-      if (alertBanner) alertBanner.style.display = 'none';
-      if (metaScheduler) {
-        metaScheduler.textContent = sched ? `ACTIVE (${sched.status})` : 'ACTIVE (Running)';
-        metaScheduler.className = 'meta-val text-emerald';
-      }
+    if (alertBanner) alertBanner.style.display = 'none';
+    if (metaScheduler) {
+      metaScheduler.textContent = (sched && sched.status) ? `ACTIVE (${sched.status})` : 'ACTIVE (Running)';
+      metaScheduler.className = 'meta-val text-emerald';
     }
   }
 }
