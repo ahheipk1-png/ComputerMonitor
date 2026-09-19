@@ -121,12 +121,26 @@ def check_task_scheduler():
         return {"installed": False, "status": "Unavailable"}
 
 
+def get_computer_alias():
+    """Retrieve friendly computer alias name."""
+    alias_file = os.path.join(BASE_DIR, 'alias.txt')
+    if os.path.exists(alias_file):
+        try:
+            with open(alias_file, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    return platform.node()
+
+
 def background_metrics_collector():
     """Runs in background thread with minimal CPU footprint (<0.2%)."""
     global LATEST_METRICS
     cycle = 0
-    cached_sched = {"installed": True, "status": "Checking..."}
-    cached_procs = []
+    cached_sched = {"installed": True, "status": "Active"}
+    cached_processes = []
     cached_groups = []
     num_cpus = psutil.cpu_count(logical=True) or 1 if HAS_PSUTIL else 1
 
@@ -138,6 +152,7 @@ def background_metrics_collector():
 
             m = {
                 'hostname': platform.node(),
+                'alias': get_computer_alias(),
                 'os': f"{platform.system()} {platform.release()}",
                 'arch': platform.machine(),
                 'task_scheduler': cached_sched,
@@ -437,6 +452,16 @@ def handle_remote_command(msg_bytes):
                             p.terminate()
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
+        elif action == 'set_alias':
+            new_alias = str(data.get('alias') or '').strip()
+            alias_file = os.path.join(BASE_DIR, 'alias.txt')
+            try:
+                with open(alias_file, 'w', encoding='utf-8') as f:
+                    f.write(new_alias)
+                with METRICS_LOCK:
+                    LATEST_METRICS['alias'] = new_alias or platform.node()
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -702,6 +727,27 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': success, 'message': msg}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
+
+        elif self.path in ('/alias', '/set_alias'):
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8') if length > 0 else ''
+                data = json.loads(body) if body else {}
+                new_alias = str(data.get('alias') or '').strip()
+                alias_file = os.path.join(BASE_DIR, 'alias.txt')
+                with open(alias_file, 'w', encoding='utf-8') as f:
+                    f.write(new_alias)
+                with METRICS_LOCK:
+                    LATEST_METRICS['alias'] = new_alias or platform.node()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'alias': new_alias or platform.node()}).encode('utf-8'))
                 return
             except Exception as e:
                 self.send_response(500)

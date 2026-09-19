@@ -107,7 +107,12 @@
       <div class="active-node-banner">
         <div class="active-node-info">
           <span class="active-badge">SELECTED COMPUTER</span>
-          <h2 id="active-node-name">Primary Workstation (Desktop-Rig)</h2>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <h2 id="active-node-name" style="margin-bottom: 0;">Primary Workstation (Desktop-Rig)</h2>
+            <button class="btn-rename-node" id="btn-rename-node" title="Rename this computer (Set Alias)" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--cyan); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+              <span>✏️ Rename</span>
+            </button>
+          </div>
           <p id="active-node-desc">Windows 11 Pro 64-bit &bull; 16-Core Intel i9-13900K &bull; IP: 192.168.1.100</p>
         </div>
         <div class="system-meta-bar">
@@ -675,6 +680,32 @@
             <span>🔄 Yes, Restart Computer</span>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Computer Modal -->
+  <div class="modal-overlay" id="rename-computer-modal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3>✏️ Rename Computer</h3>
+        <button class="modal-close" id="rename-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">
+          Set a friendly alias name for <strong id="rename-target-hostname" class="text-cyan">Computer</strong>:
+        </p>
+        <form id="rename-computer-form" class="modal-form">
+          <div class="form-group">
+            <label for="rename-input-val">Computer Alias Name</label>
+            <input type="text" id="rename-input-val" placeholder="e.g. Living Room PC, Main Rig, Office Laptop" required autofocus>
+            <small style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">This custom name will appear across all views in your dashboard.</small>
+          </div>
+          <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+            <button type="button" class="btn-cancel" id="btn-cancel-rename">Cancel</button>
+            <button type="submit" class="btn-primary">Save Alias</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

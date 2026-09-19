@@ -41,6 +41,76 @@ localStorage.setItem('cm_fleet_id', fleetId);
 
 let mqttFleetClient = null;
 
+// Computer Node Aliases Mapping
+let nodeAliases = {};
+try {
+  nodeAliases = JSON.parse(localStorage.getItem('cm_node_aliases') || '{}');
+} catch (e) {
+  nodeAliases = {};
+}
+
+function saveAliases() {
+  try {
+    localStorage.setItem('cm_node_aliases', JSON.stringify(nodeAliases));
+  } catch (e) {}
+}
+
+function getNodeDisplayName(node) {
+  if (!node) return 'Unknown Computer';
+  if (nodeAliases[node.id]) return nodeAliases[node.id];
+  if (node.name && nodeAliases[node.name]) return nodeAliases[node.name];
+  if (node.alias && node.alias.trim()) return node.alias.trim();
+  return node.name || 'Unknown Computer';
+}
+
+async function setNodeAlias(nodeId, newAlias) {
+  const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
+  if (!node) return;
+  const trimmed = (newAlias || '').trim();
+  const displayName = trimmed || node.name;
+
+  if (trimmed) {
+    nodeAliases[node.id] = trimmed;
+    if (node.name) nodeAliases[node.name] = trimmed;
+    node.alias = trimmed;
+  } else {
+    delete nodeAliases[node.id];
+    if (node.name) delete nodeAliases[node.name];
+    delete node.alias;
+  }
+  saveAliases();
+  saveNodes();
+
+  // 1. Send remote command to agent over MQTT
+  if (mqttFleetClient && mqttFleetClient.connected && node.name) {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${node.name}/cmd`;
+    mqttFleetClient.publish(cmdTopic, JSON.stringify({
+      action: 'set_alias',
+      alias: trimmed
+    }));
+  }
+
+  // 2. Direct HTTP fallback if endpoint is HTTP
+  if (node.endpoint && node.endpoint.startsWith('http')) {
+    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
+    try {
+      fetch(`${baseUrl}/alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: trimmed }),
+        signal: AbortSignal.timeout(3000)
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  showToast(`Computer alias updated to "${displayName}"`);
+  renderFleetBar();
+  updateActiveNodeBanner();
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+  }
+}
+
 // App State
 const state = {
   nodes: JSON.parse(localStorage.getItem('cm_real_nodes_v1')) || DEFAULT_NODES,
@@ -124,6 +194,9 @@ function handleIncomingNodeTelemetry(data) {
   // Update telemetry metrics
   node.status = 'online';
   node.lastSeen = new Date();
+  if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
+    node.alias = data.alias.trim();
+  }
   if (data.ip) node.ip = data.ip;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
   if (data.os) {
@@ -165,7 +238,7 @@ function handleIncomingNodeTelemetry(data) {
     const statusTxt = document.getElementById('status-text');
     if (statusEl && statusTxt) {
       statusEl.className = 'connection-status online';
-      statusTxt.textContent = `${active.name} (Live)`;
+      statusTxt.textContent = `${getNodeDisplayName(active)} (Live)`;
     }
     updateActiveNodeBanner();
     if (state.viewMode !== 'fleet') {
@@ -258,11 +331,16 @@ function renderFleetBar() {
     const card = document.createElement('div');
     card.className = `fleet-node-card ${isSelected ? 'selected' : ''}`;
     card.dataset.id = node.id;
+    const dispName = getNodeDisplayName(node);
+    const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
     card.innerHTML = `
       <div class="node-card-top">
-        <div class="node-card-brand">
+        <div class="node-card-brand" style="min-width: 0; flex: 1;">
           <span class="node-os-icon">${node.osIcon || '💻'}</span>
-          <span class="node-card-name" title="${node.name}">${node.name}</span>
+          <div style="min-width: 0; flex: 1; overflow: hidden;">
+            <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
+            ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
+          </div>
         </div>
         <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
       </div>
@@ -299,13 +377,18 @@ function renderFleetComparisonGrid() {
   state.nodes.forEach(node => {
     const card = document.createElement('div');
     card.className = 'comp-node-card';
+    const dispName = getNodeDisplayName(node);
+    const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
     card.innerHTML = `
       <div class="comp-header">
         <div class="comp-title-block">
-          <h3>${node.osIcon || '💻'} ${node.name}</h3>
-          <p>${node.os} &bull; ${node.ip}</p>
+          <h3>${node.osIcon || '💻'} ${escapeHtml(dispName)}</h3>
+          <p>${hasAlias ? `<b>${escapeHtml(node.name)}</b> &bull; ` : ''}${node.os} &bull; ${node.ip}</p>
         </div>
-        <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn-comp-rename" data-id="${node.id}" title="Rename ${escapeHtml(dispName)}" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); color: var(--cyan); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; cursor: pointer;">✏️</button>
+          <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+        </div>
       </div>
 
       <div class="comp-metrics-list">
@@ -351,7 +434,7 @@ function renderFleetComparisonGrid() {
 
       <div style="display: flex; gap: 8px; margin-top: 14px;">
         <button class="btn-comp-drill" data-id="${node.id}" style="flex: 1;">Drilldown Detailed Telemetry &rarr;</button>
-        <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${node.name}">
+        <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${escapeHtml(dispName)}">
           <span>🔄 Restart</span>
         </button>
       </div>
@@ -361,6 +444,14 @@ function renderFleetComparisonGrid() {
       selectNode(node.id);
       switchViewMode('detailed');
     });
+
+    const btnCompRename = card.querySelector('.btn-comp-rename');
+    if (btnCompRename) {
+      btnCompRename.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRenameModal(node.id);
+      });
+    }
 
     const btnRestart = card.querySelector('.btn-comp-restart');
     if (btnRestart) {
@@ -383,8 +474,11 @@ function selectNode(nodeId) {
 
 function updateActiveNodeBanner() {
   const node = getActiveNode();
-  document.getElementById('active-node-name').textContent = node.name;
-  document.getElementById('active-node-desc').textContent = `${node.os} • ${node.cpuModel} • Endpoint: ${node.endpoint}`;
+  const dispName = getNodeDisplayName(node);
+  const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
+
+  document.getElementById('active-node-name').textContent = dispName;
+  document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel} • Endpoint: ${node.endpoint}`;
   
   const isOnline = node.status === 'online';
   document.getElementById('meta-status').textContent = isOnline ? 'ONLINE (LIVE)' : 'OFFLINE';
@@ -392,7 +486,7 @@ function updateActiveNodeBanner() {
   document.getElementById('meta-uptime').textContent = isOnline ? formatUptime(node.uptime) : '--:--:--';
   document.getElementById('meta-ping').textContent = isOnline ? `${node.ping} ms` : '--';
   document.getElementById('cpu-name').textContent = node.cpuModel;
-  document.getElementById('proc-node-tag').textContent = node.name;
+  document.getElementById('proc-node-tag').textContent = dispName;
 
   // Task Scheduler Status & Alert Banner Logic
   const alertBanner = document.getElementById('agent-alert-banner');
@@ -656,6 +750,32 @@ async function executeRestartComputer() {
       }
     } catch (_) {}
   }
+}
+
+let pendingRenameNodeId = null;
+
+function openRenameModal(nodeId) {
+  const node = (nodeId ? state.nodes.find(n => n.id === nodeId) : null) || getActiveNode();
+  if (!node) return;
+  pendingRenameNodeId = node.id;
+  const modal = document.getElementById('rename-computer-modal');
+  const targetHost = document.getElementById('rename-target-hostname');
+  const input = document.getElementById('rename-input-val');
+  if (targetHost) {
+    targetHost.textContent = node.name;
+  }
+  if (input) {
+    const current = getNodeDisplayName(node);
+    input.value = (current !== node.name && current !== 'This Computer (Local)') ? current : '';
+  }
+  if (modal) modal.classList.add('active');
+  if (input) setTimeout(() => input.focus(), 60);
+}
+
+function closeRenameModal() {
+  const modal = document.getElementById('rename-computer-modal');
+  if (modal) modal.classList.remove('active');
+  pendingRenameNodeId = null;
 }
 
 function updateSortIndicators() {
@@ -974,6 +1094,9 @@ async function pollRealFleet() {
       if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
 
       if (data.hostname) node.name = data.hostname;
+      if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
+        node.alias = data.alias.trim();
+      }
       if (data.os) {
         node.os = data.os;
         if (data.os.includes('Windows')) node.osIcon = '🪟';
@@ -1028,7 +1151,7 @@ async function pollRealFleet() {
 
   if (active.status === 'online') {
     statusEl.className = 'connection-status online';
-    statusTxt.textContent = `${active.name} (Online)`;
+    statusTxt.textContent = `${getNodeDisplayName(active)} (Online)`;
   } else {
     statusEl.className = 'connection-status';
     statusTxt.textContent = 'Agent Offline (Run start-agent.bat)';
@@ -1298,6 +1421,40 @@ function setupEvents() {
   }
   if (btnConfirmRestart) {
     btnConfirmRestart.addEventListener('click', executeRestartComputer);
+  }
+
+  // Rename Computer Modal Listeners
+  const btnRenameNode = document.getElementById('btn-rename-node');
+  const btnCloseRenameModal = document.getElementById('rename-modal-close');
+  const btnCancelRename = document.getElementById('btn-cancel-rename');
+  const renameModal = document.getElementById('rename-computer-modal');
+  const renameForm = document.getElementById('rename-computer-form');
+  const renameInput = document.getElementById('rename-input-val');
+
+  if (btnRenameNode) {
+    btnRenameNode.addEventListener('click', () => {
+      openRenameModal(state.selectedNodeId);
+    });
+  }
+
+  if (btnCloseRenameModal) {
+    btnCloseRenameModal.addEventListener('click', closeRenameModal);
+  }
+  if (btnCancelRename) {
+    btnCancelRename.addEventListener('click', closeRenameModal);
+  }
+  if (renameModal) {
+    renameModal.addEventListener('click', (e) => {
+      if (e.target === renameModal) closeRenameModal();
+    });
+  }
+  if (renameForm) {
+    renameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = renameInput ? renameInput.value.trim() : '';
+      setNodeAlias(pendingRenameNodeId || state.selectedNodeId, val);
+      closeRenameModal();
+    });
   }
 
   // Collapsible Metric Cards Listeners

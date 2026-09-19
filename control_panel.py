@@ -124,11 +124,25 @@ def get_fleet_id():
     return default_id
 
 
+def get_computer_alias():
+    """Retrieve friendly computer alias name."""
+    alias_file = os.path.join(BASE_DIR, 'alias.txt')
+    if os.path.exists(alias_file):
+        try:
+            with open(alias_file, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    return platform.node()
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("ComputerMonitor Control Center")
-        self.geometry("480x600")
+        self.geometry("480x630")
         self.resizable(False, False)
         self.configure(bg="#0f172a")
 
@@ -196,6 +210,17 @@ class App(tk.Tk):
         self.lbl_fleet.pack(side="left", padx=(18, 4))
         self.lbl_fleet.bind("<Button-1>", lambda e: self.open_dashboard())
         tk.Label(row4, text="(auto-linked)", font=("Segoe UI", 8), fg="#64748b", bg="#1e293b").pack(side="left")
+
+        # 5. Computer Alias Name
+        row5 = tk.Frame(status_box, bg="#1e293b")
+        row5.pack(fill="x", pady=4)
+        tk.Label(row5, text="Computer Alias:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
+        self.alias_val = tk.StringVar(value=get_computer_alias())
+        self.ent_alias = tk.Entry(row5, textvariable=self.alias_val, font=("Segoe UI", 9), bg="#0f172a", fg="#ffffff", insertbackground="#ffffff", bd=1, relief="solid", width=18)
+        self.ent_alias.pack(side="left", padx=(18, 6), ipady=1)
+        self.ent_alias.bind("<Return>", lambda e: self.save_alias())
+        self.btn_save_alias = tk.Button(row5, text="💾 Save", font=("Segoe UI", 8, "bold"), bg="#3b82f6", fg="#ffffff", activebackground="#2563eb", activeforeground="#ffffff", relief="flat", padx=6, pady=1, cursor="hand2", command=self.save_alias)
+        self.btn_save_alias.pack(side="left")
 
         # Actions Section
         actions_box = tk.LabelFrame(body_frame, text=" Actions & Controls ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=14, pady=12, bd=1, relief="solid")
@@ -493,6 +518,21 @@ class App(tk.Tk):
         except Exception as e:
             self.log(f"Error terminating process: {e}")
             messagebox.showerror("Termination Error", str(e))
+
+    def save_alias(self):
+        new_alias = self.alias_val.get().strip()
+        if not new_alias:
+            new_alias = platform.node()
+            self.alias_val.set(new_alias)
+        alias_file = os.path.join(BASE_DIR, 'alias.txt')
+        try:
+            with open(alias_file, 'w', encoding='utf-8') as f:
+                f.write(new_alias)
+            self.log(f"Computer alias saved as: '{new_alias}'")
+            messagebox.showinfo("Alias Saved", f"Computer alias set to '{new_alias}'.\nTelemetry updates will now broadcast this name.")
+        except Exception as e:
+            self.log(f"Failed to save alias: {e}")
+            messagebox.showerror("Save Error", f"Could not save alias: {e}")
 
 
 def main():
