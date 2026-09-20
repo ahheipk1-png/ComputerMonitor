@@ -236,6 +236,10 @@ function handleIncomingNodeTelemetry(data) {
   node.rawHostname = hostname;
   if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
     node.alias = data.alias.trim();
+    if (nodeAliases[node.id] && nodeAliases[node.id] !== node.alias) {
+      nodeAliases[node.id] = node.alias;
+      saveAliases();
+    }
   }
   if (data.ip) node.ip = data.ip;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
