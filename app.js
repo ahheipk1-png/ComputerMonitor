@@ -174,16 +174,33 @@ function getActiveNode() {
 }
 
 function saveNodes() {
-  localStorage.setItem('cm_real_nodes_v1', JSON.stringify(state.nodes));
+  try {
+    const serialized = state.nodes.map(n => ({
+      ...n,
+      processes: [],
+      processGroups: []
+    }));
+    localStorage.setItem('cm_real_nodes_v1', JSON.stringify(serialized));
+  } catch (e) {
+    console.warn('Could not save nodes to localStorage:', e);
+  }
 }
 
 // Cloud Fleet Telemetry Ingestion (Zero-IP Automatic Sync)
 function handleIncomingNodeTelemetry(data) {
   if (!data || !data.hostname) return;
   const hostname = data.hostname;
-  const nodeId = `node-${hostname.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const alias = (data.alias && typeof data.alias === 'string') ? data.alias.trim() : '';
 
-  let node = state.nodes.find(n => n.id === nodeId || n.name.toLowerCase() === hostname.toLowerCase());
+  // Generate unique node ID. If distinct alias exists, combine hostname + alias
+  // so multiple computers sharing the same Windows computer name (e.g. "Michael") don't collide.
+  const nodeKey = alias ? `${hostname}_${alias}` : hostname;
+  const nodeId = `node-${nodeKey.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+  let node = state.nodes.find(n => n.id === nodeId || (n.rawHostname === hostname && n.alias === alias));
+  if (!node && !alias) {
+    node = state.nodes.find(n => n.id === `node-${hostname.toLowerCase()}` || n.name.toLowerCase() === hostname.toLowerCase());
+  }
 
   if (!node) {
     let icon = '💻';
@@ -194,6 +211,7 @@ function handleIncomingNodeTelemetry(data) {
     node = {
       id: nodeId,
       name: hostname,
+      alias: alias || hostname,
       os: data.os || 'Windows',
       osIcon: icon,
       cpuModel: data.cpu_model || (data.cpu_count ? `${data.cpu_count}-Core CPU` : 'Hardware Telemetry'),
@@ -227,7 +245,7 @@ function handleIncomingNodeTelemetry(data) {
       state.nodes.push(node);
     }
     saveNodes();
-    showToast(`⚡ Computer Connected to Fleet: [${hostname}]`);
+    showToast(`⚡ Computer Connected to Fleet: [${alias || hostname}]`);
   }
 
   // Update telemetry metrics
