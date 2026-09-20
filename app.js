@@ -180,15 +180,15 @@ function loadSavedNodes() {
     }
     list = deduped.length > 0 ? deduped : DEFAULT_NODES;
 
-    const now = Date.now();
     for (const node of list) {
+      node.status = 'offline';
+      node.liveSynced = false;
+      // Clear stale outdated agentVersion on initial page load until live telemetry confirms it
+      if (node.agentVersion && node.agentVersion !== CURRENT_WEB_VERSION) {
+        delete node.agentVersion;
+      }
       if (node.lastSeen) {
         node.lastSeen = new Date(node.lastSeen);
-        if (isNaN(node.lastSeen.getTime()) || (now - node.lastSeen.getTime() > 10000)) {
-          node.status = 'offline';
-        }
-      } else {
-        node.status = 'offline';
       }
     }
     return list;
@@ -502,10 +502,10 @@ function renderFleetBar() {
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
               <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
-              ${node.status === 'online' ? (
+              ${(node.status === 'online' && node.liveSynced) ? (
                 node.agentVersion === CURRENT_WEB_VERSION
                   ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); flex-shrink: 0;" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
-                  : `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
+                  : (node.agentVersion ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion)}</span>` : '')
               ) : ''}
             </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
@@ -556,10 +556,10 @@ function renderFleetComparisonGrid() {
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button class="btn-comp-rename" data-id="${node.id}" title="Rename ${escapeHtml(dispName)}" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); color: var(--cyan); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; cursor: pointer;">✏️</button>
-          ${node.status === 'online' ? (
+          ${(node.status === 'online' && node.liveSynced) ? (
             node.agentVersion === CURRENT_WEB_VERSION
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
-              : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
+              : (node.agentVersion ? `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion)} (Update)</button>` : '')
           ) : ''}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
         </div>
@@ -690,35 +690,41 @@ function updateActiveNodeBanner() {
   const metaScheduler = document.getElementById('meta-scheduler');
 
   if (!isOnline) {
-    if (alertBanner) alertBanner.style.display = 'flex';
-    const isHttps = window.location.protocol === 'https:';
-    const isRemoteHttp = node.endpoint.startsWith('http://') && !node.endpoint.includes('localhost') && !node.endpoint.includes('127.0.0.1');
-
-    if (isHttps && isRemoteHttp) {
-      if (alertTitle) alertTitle.textContent = 'BROWSER MIXED CONTENT BLOCK / OFFLINE';
-      if (alertDesc) {
-        alertDesc.innerHTML = `Host [<b>${node.name}</b>] (${node.endpoint}) cannot be reached from HTTPS.<br>
-        Web browsers block HTTPS websites from querying local network HTTP devices.<br>
-        <span style="display:inline-block; margin-top: 6px;">
-          👉 <b>Direct Dashboard:</b> <a href="http://${node.ip}:5500" target="_blank" style="color: var(--cyan); text-decoration: underline; font-weight: bold;">Open http://${node.ip}:5500</a> directly in your browser.
-        </span><br>
-        <span style="font-size: 0.8rem; color: var(--text-muted);">
-          Or click the padlock/tune icon in the browser address bar &rarr; Site settings &rarr; Insecure content &rarr; Allow.
-        </span>`;
-      }
+    // If MQTT clients are still connecting during initial page load/refresh, keep alert banner quiet
+    const isMqttConnecting = !mqttFleetClients.some(c => c && c.connected);
+    if (isMqttConnecting) {
+      if (alertBanner) alertBanner.style.display = 'none';
     } else {
-      if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
-      if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
-    }
-    const lastSeenDate = node.lastSeen ? new Date(node.lastSeen) : null;
-    if (alertLastSeen) {
-      alertLastSeen.textContent = (lastSeenDate && !isNaN(lastSeenDate.getTime()))
-        ? `Last Active: ${lastSeenDate.toLocaleTimeString()}`
-        : 'Last Active: Never';
-    }
-    if (metaScheduler) {
-      metaScheduler.textContent = 'STOPPED / UNREACHABLE';
-      metaScheduler.className = 'meta-val text-rose';
+      if (alertBanner) alertBanner.style.display = 'flex';
+      const isHttps = window.location.protocol === 'https:';
+      const isRemoteHttp = node.endpoint && node.endpoint.startsWith('http://') && !node.endpoint.includes('localhost') && !node.endpoint.includes('127.0.0.1');
+
+      if (isHttps && isRemoteHttp) {
+        if (alertTitle) alertTitle.textContent = 'BROWSER MIXED CONTENT BLOCK / OFFLINE';
+        if (alertDesc) {
+          alertDesc.innerHTML = `Host [<b>${node.name}</b>] (${node.endpoint}) cannot be reached from HTTPS.<br>
+          Web browsers block HTTPS websites from querying local network HTTP devices.<br>
+          <span style="display:inline-block; margin-top: 6px;">
+            👉 <b>Direct Dashboard:</b> <a href="http://${node.ip}:5500" target="_blank" style="color: var(--cyan); text-decoration: underline; font-weight: bold;">Open http://${node.ip}:5500</a> directly in your browser.
+          </span><br>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
+            Or click the padlock/tune icon in the browser address bar &rarr; Site settings &rarr; Insecure content &rarr; Allow.
+          </span>`;
+        }
+      } else {
+        if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
+        if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
+      }
+      const lastSeenDate = node.lastSeen ? new Date(node.lastSeen) : null;
+      if (alertLastSeen) {
+        alertLastSeen.textContent = (lastSeenDate && !isNaN(lastSeenDate.getTime()))
+          ? `Last Active: ${lastSeenDate.toLocaleTimeString()}`
+          : 'Last Active: Never';
+      }
+      if (metaScheduler) {
+        metaScheduler.textContent = 'STOPPED / UNREACHABLE';
+        metaScheduler.className = 'meta-val text-rose';
+      }
     }
   } else {
     // Node is actively ONLINE
@@ -728,14 +734,15 @@ function updateActiveNodeBanner() {
       metaScheduler.className = 'meta-val text-emerald';
     }
 
-    const isAgentOutdated = !node.agentVersion || node.agentVersion !== CURRENT_WEB_VERSION;
+    // Only display outdated warning if live telemetry has been received in this session and reports older version
+    const isAgentOutdated = node.liveSynced && node.agentVersion && (node.agentVersion !== CURRENT_WEB_VERSION);
     if (isAgentOutdated) {
       if (alertBanner) {
         alertBanner.style.display = 'flex';
         alertBanner.style.borderLeftColor = 'var(--amber)';
       }
       if (alertTitle) {
-        alertTitle.innerHTML = `⚠️ AGENT UPDATE AVAILABLE (Running v${node.agentVersion || 'Older'} &bull; Latest is v${CURRENT_WEB_VERSION})`;
+        alertTitle.innerHTML = `⚠️ AGENT UPDATE AVAILABLE (Running v${node.agentVersion} &bull; Latest is v${CURRENT_WEB_VERSION})`;
         alertTitle.style.color = 'var(--amber)';
       }
       if (alertDesc) {
@@ -758,7 +765,7 @@ function updateActiveNodeBanner() {
   const metaAgentVer = document.getElementById('meta-agent-version');
   const metaAgentPill = document.getElementById('meta-agent-version-pill');
   if (metaAgentVer) {
-    if (!isOnline) {
+    if (!isOnline || !node.liveSynced) {
       metaAgentVer.textContent = node.agentVersion ? `v${node.agentVersion}` : '--';
       metaAgentVer.className = 'meta-val font-mono';
       if (metaAgentPill) {
@@ -767,8 +774,8 @@ function updateActiveNodeBanner() {
         metaAgentPill.style.cursor = 'default';
         metaAgentPill.onclick = null;
       }
-    } else if (!node.agentVersion || node.agentVersion !== CURRENT_WEB_VERSION) {
-      metaAgentVer.textContent = `v${node.agentVersion || 'Older'} ⚠️`;
+    } else if (node.agentVersion && node.agentVersion !== CURRENT_WEB_VERSION) {
+      metaAgentVer.textContent = `v${node.agentVersion} ⚠️`;
       metaAgentVer.className = 'meta-val font-mono text-amber';
       if (metaAgentPill) {
         metaAgentPill.style.borderColor = 'rgba(245, 158, 11, 0.5)';
@@ -778,13 +785,13 @@ function updateActiveNodeBanner() {
         metaAgentPill.onclick = () => openOutdatedModal(node);
       }
     } else {
-      metaAgentVer.textContent = `v${node.agentVersion} 🟢`;
+      metaAgentVer.textContent = node.agentVersion ? `v${node.agentVersion} 🟢` : `v${CURRENT_WEB_VERSION} 🟢`;
       metaAgentVer.className = 'meta-val font-mono text-emerald';
       if (metaAgentPill) {
         metaAgentPill.style.borderColor = '';
         metaAgentPill.style.background = '';
         metaAgentPill.style.cursor = 'default';
-        metaAgentPill.title = `Agent v${node.agentVersion} (Latest)`;
+        metaAgentPill.title = `Agent v${node.agentVersion || CURRENT_WEB_VERSION} (Latest)`;
         metaAgentPill.onclick = null;
       }
     }
