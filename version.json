@@ -1,7 +1,7 @@
 {
-  "version": "4.7.5",
-  "build_timestamp": 1789960000,
+  "version": "4.7.6",
+  "build_timestamp": 1789965000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Bold high-contrast styling for lock delay input box, minute label, and workstation lock buttons in light and dark modes",
+  "release_notes": "Fix lock countdown timer text contrast by resolving CSS specificity inheritance and applying luminous high-visibility styling",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

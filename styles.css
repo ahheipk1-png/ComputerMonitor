@@ -833,27 +833,50 @@ body {
   color: #fef08a;
 }
 
-.scheduled-lock-banner .lock-banner-content span {
-  font-size: 0.84rem;
+.scheduled-lock-banner .lock-banner-content > span {
+  font-size: 0.86rem;
   color: #451a03;
-  font-weight: 500;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-[data-theme="dark"] .scheduled-lock-banner .lock-banner-content span {
+[data-theme="dark"] .scheduled-lock-banner .lock-banner-content > span {
   color: #f8fafc;
 }
 
-.lock-countdown-clock {
-  font-family: var(--font-mono);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #fef08a;
-  background: #0f172a;
-  padding: 2px 8px;
-  border-radius: 6px;
-  letter-spacing: 0.04em;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+.lock-countdown-clock,
+.scheduled-lock-banner .lock-countdown-clock {
+  font-family: var(--font-mono) !important;
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  color: #38bdf8 !important; /* Luminous electric cyan LED text */
+  background: #090d16 !important; /* Deep dark obsidian background */
+  padding: 3px 10px !important;
+  border-radius: 6px !important;
+  letter-spacing: 0.06em !important;
+  border: 1.5px solid #0284c7 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+  margin: 0 4px !important;
+}
+
+[data-theme="dark"] .lock-countdown-clock,
+[data-theme="dark"] .scheduled-lock-banner .lock-countdown-clock {
+  color: #38bdf8 !important;
+  background: #020617 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45) !important;
+}
+
+.btn-lock-pc.has-pending-lock {
+  background: linear-gradient(135deg, #d97706, #b45309) !important;
+  color: #ffffff !important;
+  border-color: #b45309 !important;
+  animation: pulse-amber 1.5s infinite ease-in-out;
 }
 
 .node-lock-countdown-pill {
