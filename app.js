@@ -248,6 +248,18 @@ function handleIncomingNodeTelemetry(data) {
       }
       node.id = nodeId;
     }
+    // Purge any stale ghost duplicate with the same hostname that was stuck offline
+    state.nodes = state.nodes.filter(n => {
+      if (n === node) return true;
+      if (n.id === nodeId) return false;
+      const isSameHost = (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
+                         (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
+                         (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
+      if (isSameHost && n.status !== 'online' && (!n.alias || n.alias.toLowerCase() === hostname.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
   } else {
     let icon = '💻';
     if (data.os && data.os.includes('Windows')) icon = '🪟';
