@@ -881,6 +881,9 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         elif clean_path == '/ComputerMonitorAgent.exe':
             fname = 'ComputerMonitorAgent.exe'
             ctype = 'application/octet-stream'
+        elif clean_path == '/ComputerMonitor.7z':
+            fname = 'ComputerMonitor.7z'
+            ctype = 'application/x-7z-compressed'
         elif clean_path == '/ComputerMonitor.zip':
             fname = 'ComputerMonitor.zip'
             ctype = 'application/zip'

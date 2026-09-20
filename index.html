@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2.9">
+  <link rel="stylesheet" href="styles.css?v=3.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>🖥️</text></svg>">
 </head>
 <body>
@@ -40,11 +40,7 @@
           <button class="toggle-btn" id="btn-view-fleet">Fleet Grid</button>
         </div>
 
-        <a href="ComputerMonitorControl.exe" download="ComputerMonitorControl.exe" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: var(--cyan); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download standalone Control Center for another computer (Self-contained, No Python needed)">
-          <span>⬇️ Add PC (.exe)</span>
-        </a>
-
-        <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: var(--emerald); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download complete standalone package with all tools in 7-Zip format (13.9 MB, No Python needed)">
+        <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: var(--emerald); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download complete standalone package with all tools in 7-Zip format (14 MB, No Python needed)">
           <span>⬇️ Full Suite (.7z)</span>
         </a>
 
@@ -69,21 +65,13 @@
           <span class="fleet-sync-badge" id="fleet-sync-badge" style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.15); color: var(--emerald); padding: 2px 9px; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: 8px; font-weight: normal; cursor: pointer;" title="Fleet Sync Code (click to change)">Fleet: <strong id="fleet-id-display">ahheipk1</strong> 🟢</span>
         </div>
         <div class="fleet-actions-group" style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <a href="ComputerMonitorControl.exe" download class="btn-download-agent" id="btn-download-gui" title="Download Standalone Desktop GUI (No installation needed)">
+          <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="btn-download-agent" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: var(--emerald);" title="Download full standalone package with all tools in 7-Zip format (14 MB)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>Download Desktop GUI</span>
-          </a>
-          <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="btn-download-agent" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.35); color: var(--emerald);" title="Download full standalone package with all tools in 7-Zip format (13.9 MB)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <span>Download .7z Suite (14 MB)</span>
+            <span>Download Full Suite (.7z)</span>
           </a>
           <button class="btn-add-node" id="btn-add-node">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -545,7 +533,7 @@
       <div class="footer-links">
         <a href="https://github.com/ahheipk1-png/ComputerMonitor" target="_blank" rel="noopener">GitHub Repository</a>
         <span>&bull;</span>
-        <a href="ComputerMonitorControl.exe" download id="btn-footer-download">📥 Download Desktop GUI (.exe)</a>
+        <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" id="btn-footer-download">📦 Download Full Suite (.7z)</a>
         <span>&bull;</span>
         <a href="#agent-help" id="btn-agent-help">Setup Guide</a>
       </div>
@@ -565,11 +553,11 @@
           <div class="intro-banner-text">
             <strong style="font-size: 1rem; color: var(--cyan);">Add Any Computer in 1 Click (Zero IP Needed)</strong>
             <p style="margin: 6px 0 12px; font-size: 0.88rem; line-height: 1.45;">
-              1. Download and open the Desktop GUI on that computer.<br>
-              2. Click <b>Start Agent</b> or <b>Install Startup Task</b>.<br>
+              1. Download and extract the Full Suite (.7z) on that computer.<br>
+              2. Open <b>ComputerMonitorControl.exe</b> and click <b>Start Agent</b> or <b>Install Startup Task</b>.<br>
               3. That's it! It automatically links to your fleet (<strong>ahheipk1</strong>) and opens this website with that computer already active.
             </p>
-            <a href="ComputerMonitorControl.exe" download class="btn-download-inline" style="display: inline-block; padding: 10px 18px; font-size: 0.9rem; font-weight: bold;">📥 Download Desktop GUI (.exe)</a>
+            <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="btn-download-inline" style="display: inline-block; padding: 10px 18px; font-size: 0.9rem; font-weight: bold; background: #10b981; color: #fff;">📦 Download Full Suite (.7z)</a>
           </div>
         </div>
 
@@ -617,11 +605,10 @@
         <p>You can monitor as many computers as you want on this dashboard! Choose your platform:</p>
         
         <div style="margin: 14px 0;">
-          <h4 style="font-size: 0.9rem; color: var(--cyan); margin-bottom: 6px;">Windows Computers (No Python Needed):</h4>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">Download and open the Desktop GUI. It starts the background telemetry agent automatically and shows your computer's URL to connect here:</p>
+          <h4 style="font-size: 0.9rem; color: var(--emerald); margin-bottom: 6px;">Windows Computers (No Python Needed):</h4>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px;">Download and extract the Full Suite. Run <b>ComputerMonitorControl.exe</b> to start telemetry or install the background auto-start task:</p>
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <a href="ComputerMonitorControl.exe" download class="btn-dl-action btn-dl-primary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Download Desktop GUI (.exe)</a>
-            <a href="ComputerMonitor.7z" download class="btn-dl-action btn-dl-secondary" style="padding: 8px 16px; font-size: 0.85rem; border-color: rgba(16, 185, 129, 0.4); color: var(--emerald);">📦 Download Full Suite (.7z - 14 MB)</a>
+            <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="btn-dl-action btn-dl-primary" style="padding: 8px 16px; font-size: 0.85rem; background: var(--emerald); border-color: var(--emerald); color: #fff;">📦 Download Full Suite (.7z - 14 MB)</a>
           </div>
         </div>
 
@@ -731,6 +718,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=3.3"></script>
+  <script src="app.js?v=3.4"></script>
 </body>
 </html>
