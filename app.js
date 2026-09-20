@@ -131,13 +131,29 @@ function loadSavedNodes() {
   try {
     const raw = localStorage.getItem('cm_real_nodes_v1');
     if (!raw) return DEFAULT_NODES;
-    const list = JSON.parse(raw);
+    let list = JSON.parse(raw);
     if (!Array.isArray(list) || list.length === 0) return DEFAULT_NODES;
+
+    // Deduplicate any nodes by (hostname + alias)
+    const seen = new Map();
+    const deduped = [];
+    for (const node of list) {
+      if (!node || !node.name) continue;
+      const h = (node.rawHostname || node.name || '').toLowerCase();
+      const a = (node.alias || node.name || '').toLowerCase();
+      const key = `${h}::${a}`;
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        deduped.push(node);
+      }
+    }
+    list = deduped.length > 0 ? deduped : DEFAULT_NODES;
+
     const now = Date.now();
     for (const node of list) {
       if (node.lastSeen) {
         node.lastSeen = new Date(node.lastSeen);
-        if (isNaN(node.lastSeen.getTime()) || (now - node.lastSeen.getTime() > 8000)) {
+        if (isNaN(node.lastSeen.getTime()) || (now - node.lastSeen.getTime() > 10000)) {
           node.status = 'offline';
         }
       } else {
@@ -170,7 +186,16 @@ const canvases = {
 };
 
 function getActiveNode() {
-  return state.nodes.find(n => n.id === state.selectedNodeId) || state.nodes[0];
+  let active = state.nodes.find(n => n.id === state.selectedNodeId);
+  if (!active || (active.status !== 'online' && state.nodes.some(n => n.status === 'online'))) {
+    // If the currently selected node is offline, but there is an active online node, auto-focus the online node
+    const onlineNode = state.nodes.find(n => n.status === 'online');
+    if (onlineNode) {
+      state.selectedNodeId = onlineNode.id;
+      active = onlineNode;
+    }
+  }
+  return active || state.nodes[0];
 }
 
 function saveNodes() {
@@ -197,12 +222,33 @@ function handleIncomingNodeTelemetry(data) {
   const nodeKey = alias ? `${hostname}_${alias}` : hostname;
   const nodeId = `node-${nodeKey.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
-  let node = state.nodes.find(n => n.id === nodeId || (n.rawHostname === hostname && n.alias === alias));
-  if (!node && !alias) {
-    node = state.nodes.find(n => n.id === `node-${hostname.toLowerCase()}` || n.name.toLowerCase() === hostname.toLowerCase());
+  // Robust node matching: Match by ID, then by alias, then by hostname
+  let node = state.nodes.find(n => n.id === nodeId);
+  if (!node && alias) {
+    node = state.nodes.find(n => n.alias && n.alias.toLowerCase() === alias.toLowerCase());
+  }
+  if (!node) {
+    node = state.nodes.find(n => {
+      const matchHost = (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
+                        (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
+                        (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
+      if (!matchHost) return false;
+      if (alias && n.alias && n.alias.toLowerCase() !== alias.toLowerCase() && n.alias.toLowerCase() !== hostname.toLowerCase()) {
+        return false;
+      }
+      return true;
+    });
   }
 
-  if (!node) {
+  if (node) {
+    // Smoothly update ID to the unique nodeKey format if migrating from legacy ID
+    if (node.id !== nodeId) {
+      if (state.selectedNodeId === node.id) {
+        state.selectedNodeId = nodeId;
+      }
+      node.id = nodeId;
+    }
+  } else {
     let icon = '💻';
     if (data.os && data.os.includes('Windows')) icon = '🪟';
     else if (data.os && (data.os.includes('Mac') || data.os.includes('Darwin'))) icon = '🍎';
