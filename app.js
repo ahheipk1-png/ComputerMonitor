@@ -253,22 +253,19 @@ function handleIncomingNodeTelemetry(data) {
   const nodeKey = alias ? `${hostname}_${alias}` : hostname;
   const nodeId = `node-${nodeKey.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
-  // Robust node matching: Match by ID, then by alias, then by hostname
+  // Robust node matching: Prioritize hostname identity so different physical machines never collide
   let node = state.nodes.find(n => n.id === nodeId);
-  if (!node && alias) {
-    node = state.nodes.find(n => n.alias && n.alias.toLowerCase() === alias.toLowerCase());
-  }
   if (!node) {
     node = state.nodes.find(n => {
-      const matchHost = (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
-                        (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
-                        (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
-      if (!matchHost) return false;
-      if (alias && n.alias && n.alias.toLowerCase() !== alias.toLowerCase() && n.alias.toLowerCase() !== hostname.toLowerCase()) {
-        return false;
-      }
-      return true;
+      const isSameHost = (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
+                         (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
+                         (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`) ||
+                         (n.id && n.id.toLowerCase().startsWith(`node-${hostname.toLowerCase()}_`));
+      return isSameHost;
     });
+  }
+  if (!node) {
+    node = state.nodes.find(n => n.id === 'node-local' && n.status === 'offline');
   }
 
   if (node) {
@@ -286,7 +283,7 @@ function handleIncomingNodeTelemetry(data) {
       const isSameHost = (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
                          (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
                          (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
-      if (isSameHost && n.status !== 'online' && (!n.alias || n.alias.toLowerCase() === hostname.toLowerCase())) {
+      if (isSameHost && n.status !== 'online') {
         return false;
       }
       return true;
