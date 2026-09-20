@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.0"
+AGENT_VERSION = "4.7.1"
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -652,7 +652,30 @@ def handle_remote_command(msg_bytes):
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
         elif action == 'lock':
-            execute_system_lock()
+            lock_delay_sec = 0
+            if 'delay_seconds' in data:
+                try:
+                    lock_delay_sec = max(0, int(data['delay_seconds']))
+                except Exception:
+                    pass
+            elif 'delay_minutes' in data:
+                try:
+                    lock_delay_sec = max(0, int(float(data['delay_minutes']) * 60))
+                except Exception:
+                    pass
+            elif 'delay' in data:
+                try:
+                    lock_delay_sec = max(0, int(data['delay']))
+                except Exception:
+                    pass
+
+            if lock_delay_sec > 0:
+                def delayed_lock_worker(sec):
+                    time.sleep(sec)
+                    execute_system_lock()
+                threading.Thread(target=delayed_lock_worker, args=(lock_delay_sec,), daemon=True).start()
+            else:
+                execute_system_lock()
         elif action == 'update':
             threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':

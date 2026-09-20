@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.0';
-const EXPECTED_AGENT_VERSION = '4.7.0';
+const CURRENT_WEB_VERSION = '4.7.1';
+const EXPECTED_AGENT_VERSION = '4.7.1';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -1049,14 +1049,37 @@ async function executeRestartComputer() {
 
 let pendingLockNodeId = null;
 
+function updateLockModalButtonText(mins) {
+  const btnText = document.getElementById('confirm-lock-btn-text');
+  const m = parseInt(mins, 10) || 0;
+  if (btnText) {
+    if (m > 0) {
+      btnText.textContent = `🔒 Yes, Lock in ${m} min`;
+    } else {
+      btnText.textContent = '🔒 Yes, Lock Computer';
+    }
+  }
+}
+
 function openLockModal(nodeId) {
   pendingLockNodeId = nodeId;
   const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
   const nameEl = document.getElementById('lock-target-node');
   if (nameEl) nameEl.textContent = `${getNodeDisplayName(node)} (${node.rawHostname || node.name || 'Remote PC'})`;
 
+  const headerInput = document.getElementById('lock-delay-minutes');
+  const modalInput = document.getElementById('modal-lock-delay-minutes');
+  const initialMins = headerInput ? Math.max(0, parseInt(headerInput.value, 10) || 0) : 0;
+  if (modalInput) {
+    modalInput.value = initialMins;
+  }
+  updateLockModalButtonText(initialMins);
+
   const modal = document.getElementById('lock-computer-modal');
   if (modal) modal.classList.add('active');
+  if (modalInput) {
+    setTimeout(() => modalInput.focus(), 80);
+  }
 }
 
 function closeLockModal() {
@@ -1068,17 +1091,30 @@ function closeLockModal() {
 async function executeLockComputer() {
   if (!pendingLockNodeId) return;
   const node = state.nodes.find(n => n.id === pendingLockNodeId) || getActiveNode();
+
+  const modalInput = document.getElementById('modal-lock-delay-minutes');
+  const headerInput = document.getElementById('lock-delay-minutes');
+  const delayMinutes = Math.max(0, Math.min(720, parseInt(modalInput?.value ?? headerInput?.value ?? 0, 10) || 0));
+  const delaySeconds = delayMinutes * 60;
+
   closeLockModal();
 
   const dispName = getNodeDisplayName(node);
 
   // Dispatch exclusively over MQTT Cloud Fleet channel with strict GUID/alias targeting
   const anySent = sendNodeCommand(node, {
-    action: 'lock'
+    action: 'lock',
+    delay_minutes: delayMinutes,
+    delay_seconds: delaySeconds,
+    delay: delaySeconds
   });
 
   if (anySent) {
-    showToast(`🔒 Workstation lock signal dispatched to [${dispName}]...`);
+    if (delayMinutes > 0) {
+      showToast(`⏱️ Workstation lock scheduled for [${dispName}] in ${delayMinutes} minute(s)...`);
+    } else {
+      showToast(`🔒 Workstation lock signal dispatched to [${dispName}]...`);
+    }
   }
 }
 
@@ -1819,6 +1855,28 @@ function setupEvents() {
   const btnCancelLock = document.getElementById('btn-cancel-lock');
   const btnConfirmLock = document.getElementById('btn-confirm-lock');
   const lockModal = document.getElementById('lock-computer-modal');
+  const lockDelayInput = document.getElementById('lock-delay-minutes');
+  const modalLockDelayInput = document.getElementById('modal-lock-delay-minutes');
+
+  if (lockDelayInput) {
+    lockDelayInput.addEventListener('input', (e) => {
+      let v = parseInt(e.target.value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > 720) v = 720;
+      if (modalLockDelayInput) modalLockDelayInput.value = v;
+      updateLockModalButtonText(v);
+    });
+  }
+
+  if (modalLockDelayInput) {
+    modalLockDelayInput.addEventListener('input', (e) => {
+      let v = parseInt(e.target.value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > 720) v = 720;
+      if (lockDelayInput) lockDelayInput.value = v;
+      updateLockModalButtonText(v);
+    });
+  }
 
   if (btnLockComp) {
     btnLockComp.addEventListener('click', () => {

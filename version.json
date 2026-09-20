@@ -1,7 +1,7 @@
 {
-  "version": "4.7.0",
-  "build_timestamp": 1789938000,
+  "version": "4.7.1",
+  "build_timestamp": 1789940000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Hardware MachineGuid collision-isolated routing and strict command targeting across identical hostnames",
+  "release_notes": "Customizable workstation lock delay timer (enter minutes to delay lock)",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }
