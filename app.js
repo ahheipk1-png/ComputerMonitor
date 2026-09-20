@@ -486,7 +486,11 @@ function renderFleetBar() {
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
               <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
-              ${node.agentVersion ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.25); flex-shrink: 0;" title="Agent Version">v${escapeHtml(node.agentVersion)}</span>` : ''}
+              ${node.status === 'online' ? (
+                node.agentVersion === CURRENT_WEB_VERSION
+                  ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); flex-shrink: 0;" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
+                  : `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
+              ) : ''}
             </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
           </div>
@@ -536,6 +540,11 @@ function renderFleetComparisonGrid() {
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button class="btn-comp-rename" data-id="${node.id}" title="Rename ${escapeHtml(dispName)}" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); color: var(--cyan); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; cursor: pointer;">✏️</button>
+          ${node.status === 'online' ? (
+            node.agentVersion === CURRENT_WEB_VERSION
+              ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
+              : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
+          ) : ''}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
         </div>
       </div>
@@ -602,6 +611,14 @@ function renderFleetComparisonGrid() {
       btnCompRename.addEventListener('click', (e) => {
         e.stopPropagation();
         openRenameModal(node.id);
+      });
+    }
+
+    const btnCompOutdated = card.querySelector('.btn-comp-outdated');
+    if (btnCompOutdated) {
+      btnCompOutdated.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openOutdatedModal(node);
       });
     }
 
@@ -690,10 +707,70 @@ function updateActiveNodeBanner() {
   } else {
     // Node is actively ONLINE
     const sched = node.taskScheduler;
-    if (alertBanner) alertBanner.style.display = 'none';
     if (metaScheduler) {
       metaScheduler.textContent = (sched && sched.status) ? `ACTIVE (${sched.status})` : 'ACTIVE (Running)';
       metaScheduler.className = 'meta-val text-emerald';
+    }
+
+    const isAgentOutdated = !node.agentVersion || node.agentVersion !== CURRENT_WEB_VERSION;
+    if (isAgentOutdated) {
+      if (alertBanner) {
+        alertBanner.style.display = 'flex';
+        alertBanner.style.borderLeftColor = 'var(--amber)';
+      }
+      if (alertTitle) {
+        alertTitle.innerHTML = `⚠️ AGENT UPDATE AVAILABLE (Running v${node.agentVersion || 'Older'} &bull; Latest is v${CURRENT_WEB_VERSION})`;
+        alertTitle.style.color = 'var(--amber)';
+      }
+      if (alertDesc) {
+        alertDesc.innerHTML = `This computer is running an earlier agent build. Modern features like <b>Remote Workstation Lock</b> require updating to v${CURRENT_WEB_VERSION}.<br>
+        <button id="btn-banner-outdated" class="btn-primary" style="margin-top: 8px; padding: 5px 14px; font-size: 0.8rem; background: linear-gradient(135deg, #d97706, #b45309); border-color: transparent; cursor: pointer;">
+          ⚡ 1-Click Update Instructions
+        </button>`;
+        const btnBannerOutdated = document.getElementById('btn-banner-outdated');
+        if (btnBannerOutdated) {
+          btnBannerOutdated.onclick = () => openOutdatedModal(node);
+        }
+      }
+      if (alertLastSeen) alertLastSeen.textContent = `Fleet Version: v${CURRENT_WEB_VERSION}`;
+    } else {
+      if (alertBanner) alertBanner.style.display = 'none';
+    }
+  }
+
+  // Update Agent Version Meta Pill
+  const metaAgentVer = document.getElementById('meta-agent-version');
+  const metaAgentPill = document.getElementById('meta-agent-version-pill');
+  if (metaAgentVer) {
+    if (!isOnline) {
+      metaAgentVer.textContent = node.agentVersion ? `v${node.agentVersion}` : '--';
+      metaAgentVer.className = 'meta-val font-mono';
+      if (metaAgentPill) {
+        metaAgentPill.style.borderColor = '';
+        metaAgentPill.style.background = '';
+        metaAgentPill.style.cursor = 'default';
+        metaAgentPill.onclick = null;
+      }
+    } else if (!node.agentVersion || node.agentVersion !== CURRENT_WEB_VERSION) {
+      metaAgentVer.textContent = `v${node.agentVersion || 'Older'} ⚠️`;
+      metaAgentVer.className = 'meta-val font-mono text-amber';
+      if (metaAgentPill) {
+        metaAgentPill.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+        metaAgentPill.style.background = 'rgba(245, 158, 11, 0.12)';
+        metaAgentPill.style.cursor = 'pointer';
+        metaAgentPill.title = 'Agent is outdated! Click for update instructions.';
+        metaAgentPill.onclick = () => openOutdatedModal(node);
+      }
+    } else {
+      metaAgentVer.textContent = `v${node.agentVersion} 🟢`;
+      metaAgentVer.className = 'meta-val font-mono text-emerald';
+      if (metaAgentPill) {
+        metaAgentPill.style.borderColor = '';
+        metaAgentPill.style.background = '';
+        metaAgentPill.style.cursor = 'default';
+        metaAgentPill.title = `Agent v${node.agentVersion} (Latest)`;
+        metaAgentPill.onclick = null;
+      }
     }
   }
 }
@@ -1058,6 +1135,26 @@ function closeRenameModal() {
   const modal = document.getElementById('rename-computer-modal');
   if (modal) modal.classList.remove('active');
   pendingRenameNodeId = null;
+}
+
+function openOutdatedModal(node) {
+  const targetNode = node || getActiveNode();
+  if (!targetNode) return;
+  const nameEl = document.getElementById('outdated-target-name');
+  const curVerEl = document.getElementById('outdated-current-ver');
+  const latestVerEl = document.getElementById('outdated-latest-ver');
+
+  if (nameEl) nameEl.textContent = `${getNodeDisplayName(targetNode)} (${targetNode.rawHostname || targetNode.name || 'Remote PC'})`;
+  if (curVerEl) curVerEl.textContent = targetNode.agentVersion ? `v${targetNode.agentVersion}` : 'Older (Pre-v4.5)';
+  if (latestVerEl) latestVerEl.textContent = `v${CURRENT_WEB_VERSION}`;
+
+  const modal = document.getElementById('outdated-agent-modal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeOutdatedModal() {
+  const modal = document.getElementById('outdated-agent-modal');
+  if (modal) modal.classList.remove('active');
 }
 
 function updateSortIndicators() {
@@ -1776,6 +1873,23 @@ function setupEvents() {
       const val = renameInput ? renameInput.value.trim() : '';
       setNodeAlias(pendingRenameNodeId || state.selectedNodeId, val);
       closeRenameModal();
+    });
+  }
+
+  // Outdated Agent Modal Listeners
+  const btnCloseOutdatedModal = document.getElementById('outdated-modal-close');
+  const btnCloseOutdatedBtn = document.getElementById('btn-close-outdated-modal');
+  const outdatedModal = document.getElementById('outdated-agent-modal');
+
+  if (btnCloseOutdatedModal) {
+    btnCloseOutdatedModal.addEventListener('click', closeOutdatedModal);
+  }
+  if (btnCloseOutdatedBtn) {
+    btnCloseOutdatedBtn.addEventListener('click', closeOutdatedModal);
+  }
+  if (outdatedModal) {
+    outdatedModal.addEventListener('click', (e) => {
+      if (e.target === outdatedModal) closeOutdatedModal();
     });
   }
 

@@ -370,6 +370,7 @@ class App(tk.Tk):
         else:
             self.lbl_version_status.config(text=f"v{APP_VERSION} (Update: v{cloud_ver} ⚠️)", fg="#f59e0b")
             self.btn_update_now.pack(side="left", padx=(18, 6))
+            self.log(f"⚠️ NEW VERSION AVAILABLE: v{cloud_ver} (You are running v{APP_VERSION}). Click [⬇️ Update Now] to update.")
 
     def perform_update(self):
         if not messagebox.askyesno("Update Agent", f"A new version of ComputerMonitor is available.\n\nWould you like to download and install the update now?"):
