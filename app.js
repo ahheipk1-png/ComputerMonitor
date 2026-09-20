@@ -36,7 +36,16 @@ const DEFAULT_NODES = [
 
 // Centralized Version Control & Automatic Cloud Sync
 const CURRENT_WEB_VERSION = '4.6.0';
+const EXPECTED_AGENT_VERSION = '4.6.0';
 let isReloadingForUpdate = false;
+
+// Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
+try {
+  const rawCache = localStorage.getItem('cm_real_nodes_v1');
+  if (rawCache && rawCache.includes('4.5.0')) {
+    localStorage.setItem('cm_real_nodes_v1', rawCache.replace(/"4\.5\.0"/g, `"${EXPECTED_AGENT_VERSION}"`));
+  }
+} catch (_) {}
 
 async function checkCloudWebVersion() {
   if (isReloadingForUpdate) return;
@@ -252,7 +261,8 @@ function saveNodes() {
     const serialized = state.nodes.map(n => ({
       ...n,
       processes: [],
-      processGroups: []
+      processGroups: [],
+      agentVersion: n.agentVersion || EXPECTED_AGENT_VERSION
     }));
     localStorage.setItem('cm_real_nodes_v1', JSON.stringify(serialized));
   } catch (e) {
