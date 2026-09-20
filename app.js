@@ -183,10 +183,7 @@ function loadSavedNodes() {
     for (const node of list) {
       node.status = 'offline';
       node.liveSynced = false;
-      // Clear stale outdated agentVersion on initial page load until live telemetry confirms it
-      if (node.agentVersion && node.agentVersion !== CURRENT_WEB_VERSION) {
-        delete node.agentVersion;
-      }
+      node.agentVersion = node.agentVersion || CURRENT_WEB_VERSION;
       if (node.lastSeen) {
         node.lastSeen = new Date(node.lastSeen);
       }
@@ -355,8 +352,10 @@ function handleIncomingNodeTelemetry(data) {
 
   // Update telemetry metrics
   node.status = 'online';
+  node.liveSynced = true;
   node.lastSeen = new Date();
   node.rawHostname = hostname;
+  node.agentVersion = data.agent_version || node.agentVersion || CURRENT_WEB_VERSION;
   if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
     node.alias = data.alias.trim();
     if (nodeAliases[node.id] && nodeAliases[node.id] !== node.alias) {
@@ -365,7 +364,6 @@ function handleIncomingNodeTelemetry(data) {
     }
   }
   if (data.ip) node.ip = data.ip;
-  if (data.agent_version) node.agentVersion = data.agent_version;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
   if (data.os) {
     node.os = data.os;
@@ -502,10 +500,10 @@ function renderFleetBar() {
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
               <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
-              ${(node.status === 'online' && node.liveSynced) ? (
+              ${node.status === 'online' ? (
                 node.agentVersion === CURRENT_WEB_VERSION
                   ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); flex-shrink: 0;" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
-                  : (node.agentVersion ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion)}</span>` : '')
+                  : `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
               ) : ''}
             </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
@@ -556,10 +554,10 @@ function renderFleetComparisonGrid() {
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button class="btn-comp-rename" data-id="${node.id}" title="Rename ${escapeHtml(dispName)}" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); color: var(--cyan); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; cursor: pointer;">✏️</button>
-          ${(node.status === 'online' && node.liveSynced) ? (
+          ${node.status === 'online' ? (
             node.agentVersion === CURRENT_WEB_VERSION
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
-              : (node.agentVersion ? `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion)} (Update)</button>` : '')
+              : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
           ) : ''}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
         </div>
