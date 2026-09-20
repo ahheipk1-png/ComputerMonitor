@@ -483,18 +483,24 @@ def handle_remote_command(msg_bytes):
     try:
         data = json.loads(msg_bytes.decode('utf-8'))
         action = data.get('action')
+        delay = int(data.get('delay', 5))
+        delay = max(1, min(delay, 60))
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
+
+        shutdown_bin = 'shutdown'
+        if platform.system() == 'Windows':
+            sys32 = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'shutdown.exe')
+            if os.path.exists(sys32):
+                shutdown_bin = sys32
+
         if action == 'restart':
-            delay = int(data.get('delay', 5))
-            creationflags = 0x08000000 if sys.platform == 'win32' else 0
             if platform.system() == 'Windows':
-                subprocess.Popen(['shutdown', '/r', '/f', '/t', str(delay)], creationflags=creationflags)
+                subprocess.Popen([shutdown_bin, '/r', '/f', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'], creationflags=creationflags)
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
         elif action in ('shutdown', 'poweroff'):
-            delay = int(data.get('delay', 5))
-            creationflags = 0x08000000 if sys.platform == 'win32' else 0
             if platform.system() == 'Windows':
-                subprocess.Popen(['shutdown', '/s', '/f', '/t', str(delay)], creationflags=creationflags)
+                subprocess.Popen([shutdown_bin, '/s', '/f', '/t', str(delay), '/c', 'Shutdown requested from ComputerMonitor Dashboard'], creationflags=creationflags)
             else:
                 subprocess.Popen(['shutdown', '-h', f'+{max(1, delay // 60)}'])
         elif action == 'kill':
@@ -550,7 +556,6 @@ def mqtt_fleet_worker():
     hostname = platform.node()
     machine_id = re.sub(r'[^a-zA-Z0-9_-]', '', hostname).lower() or "pc"
     pub_topic = f"computermonitor/fleet/{fleet_id}/{hostname}"
-    cmd_topic = f"computermonitor/fleet/{fleet_id}/{hostname}/cmd"
     brokers = ['broker.emqx.io', 'broker.hivemq.com']
     broker_idx = 0
 
@@ -563,10 +568,14 @@ def mqtt_fleet_worker():
             time.sleep(4)
             continue
 
-        client.subscribe(cmd_topic)
+        client.subscribe(f"computermonitor/fleet/{fleet_id}/{hostname}/cmd", msg_id=1)
+        if hostname.lower() != hostname:
+            client.subscribe(f"computermonitor/fleet/{fleet_id}/{hostname.lower()}/cmd", msg_id=2)
         current_alias = get_computer_alias()
-        if current_alias and current_alias.lower() != hostname.lower():
-            client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias}/cmd")
+        if current_alias:
+            client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias}/cmd", msg_id=3)
+            if current_alias.lower() != current_alias:
+                client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias.lower()}/cmd", msg_id=4)
 
         while client.connected:
             try:
@@ -589,7 +598,7 @@ def mqtt_fleet_worker():
                     inc = client.check_incoming()
                     if inc:
                         topic, msg = inc
-                        if topic == cmd_topic:
+                        if topic.endswith('/cmd'):
                             handle_remote_command(msg)
 
             except Exception:

@@ -745,13 +745,20 @@ async function executeRestartComputer() {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  const targetHosts = Array.from(new Set([
+  const rawHosts = [
     node.rawHostname,
     node.name,
     node.hostname,
     node.alias,
-    nodeAliases[node.id]
-  ].filter(h => h && typeof h === 'string' && h.trim())));
+    nodeAliases[node.id],
+    node.id ? node.id.replace(/^node-/, '') : null,
+  ].filter(h => h && typeof h === 'string' && h.trim());
+
+  const targetHosts = Array.from(new Set([
+    ...rawHosts,
+    ...rawHosts.map(h => h.toLowerCase()),
+    ...rawHosts.map(h => h.toUpperCase()),
+  ]));
 
   let anySent = false;
   targetHosts.forEach(th => {
@@ -827,13 +834,20 @@ async function executeShutdownComputer() {
   const dispName = getNodeDisplayName(node);
 
   // 1. Dispatch over MQTT Cloud Fleet channel
-  const targetHosts = Array.from(new Set([
+  const rawHosts = [
     node.rawHostname,
     node.name,
     node.hostname,
     node.alias,
-    nodeAliases[node.id]
-  ].filter(h => h && typeof h === 'string' && h.trim())));
+    nodeAliases[node.id],
+    node.id ? node.id.replace(/^node-/, '') : null,
+  ].filter(h => h && typeof h === 'string' && h.trim());
+
+  const targetHosts = Array.from(new Set([
+    ...rawHosts,
+    ...rawHosts.map(h => h.toLowerCase()),
+    ...rawHosts.map(h => h.toUpperCase()),
+  ]));
 
   let anySent = false;
   targetHosts.forEach(th => {
