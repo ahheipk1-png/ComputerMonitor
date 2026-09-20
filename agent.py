@@ -491,6 +491,43 @@ def get_fleet_id():
     return default_id
 
 
+def execute_system_lock():
+    """Lock the computer session and return to the OS login screen.
+    Handles both interactive user sessions (Session 1+) and SYSTEM services (Session 0).
+    """
+    if platform.system() == 'Windows':
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
+        import ctypes
+        # 1. Standard Win32 API
+        try:
+            ctypes.windll.user32.LockWorkStation()
+        except Exception:
+            pass
+        # 2. Terminal Services session disconnect (works from Session 0 / SYSTEM service)
+        try:
+            session_id = ctypes.windll.kernel32.WTSGetActiveConsoleSessionId()
+            if session_id != 0xFFFFFFFF and session_id != 0:
+                ctypes.windll.wtsapi32.WTSDisconnectSession(0, session_id, False)
+        except Exception:
+            pass
+        # 3. Native tsdiscon.exe fallback
+        try:
+            tsdiscon_path = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'tsdiscon.exe')
+            if os.path.exists(tsdiscon_path):
+                subprocess.Popen([tsdiscon_path], creationflags=creationflags)
+        except Exception:
+            pass
+        # 4. Rundll32 fallback
+        try:
+            subprocess.Popen(['rundll32.exe', 'user32.dll,LockWorkStation'], creationflags=creationflags)
+        except Exception:
+            pass
+    elif platform.system() == 'Darwin':
+        subprocess.Popen(['pmset', 'displaysleepnow'])
+    else:
+        subprocess.Popen(['xdg-screensaver', 'lock'])
+
+
 def handle_remote_command(msg_bytes):
     """Execute remote command received via secure fleet MQTT channel."""
     try:
@@ -512,16 +549,7 @@ def handle_remote_command(msg_bytes):
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
         elif action == 'lock':
-            if platform.system() == 'Windows':
-                try:
-                    import ctypes
-                    ctypes.windll.user32.LockWorkStation()
-                except Exception:
-                    pass
-            elif platform.system() == 'Darwin':
-                subprocess.Popen(['pmset', 'displaysleepnow'])
-            else:
-                subprocess.Popen(['xdg-screensaver', 'lock'])
+            execute_system_lock()
         elif action == 'kill':
             val = str(data.get('val') or data.get('identifier') or data.get('name') or data.get('pid') or '').strip()
             is_pid = data.get('isPid', False)
@@ -855,16 +883,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
 
                 def execute_lock():
                     time.sleep(0.3)
-                    if platform.system() == 'Windows':
-                        try:
-                            import ctypes
-                            ctypes.windll.user32.LockWorkStation()
-                        except Exception:
-                            pass
-                    elif platform.system() == 'Darwin':
-                        subprocess.run(['pmset', 'displaysleepnow'], check=False)
-                    else:
-                        subprocess.run(['xdg-screensaver', 'lock'], check=False)
+                    execute_system_lock()
 
                 threading.Thread(target=execute_lock, daemon=True).start()
                 return
