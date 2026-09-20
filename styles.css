@@ -411,6 +411,17 @@ body {
   color: var(--rose);
 }
 
+.node-status-pill.syncing {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--cyan);
+  animation: pulseSync 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseSync {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .node-card-stats {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

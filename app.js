@@ -181,9 +181,9 @@ function loadSavedNodes() {
     list = deduped.length > 0 ? deduped : DEFAULT_NODES;
 
     for (const node of list) {
-      node.status = 'offline';
+      node.status = 'syncing';
       node.liveSynced = false;
-      node.agentVersion = node.agentVersion || CURRENT_WEB_VERSION;
+      node.agentVersion = CURRENT_WEB_VERSION;
       if (node.lastSeen) {
         node.lastSeen = new Date(node.lastSeen);
       }
@@ -504,12 +504,12 @@ function renderFleetBar() {
                 node.agentVersion === CURRENT_WEB_VERSION
                   ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); flex-shrink: 0;" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
                   : `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
-              ) : ''}
+              ) : (node.status === 'syncing' ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.25); flex-shrink: 0;" title="Syncing telemetry...">v${CURRENT_WEB_VERSION}</span>` : '')}
             </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
           </div>
         </div>
-        <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+        <span class="node-status-pill ${node.status}">${node.status === 'syncing' ? 'SYNCING' : node.status.toUpperCase()}</span>
       </div>
       <div class="node-card-stats">
         <div class="node-mini-stat">
@@ -522,7 +522,7 @@ function renderFleetBar() {
         </div>
         <div class="node-mini-stat">
           <span class="node-mini-lbl">STATUS</span>
-          <span class="node-mini-val ${node.status === 'online' ? 'text-emerald' : 'text-rose'}">${node.status === 'online' ? 'LIVE' : 'OFFLINE'}</span>
+          <span class="node-mini-val ${node.status === 'online' ? 'text-emerald' : (node.status === 'syncing' ? 'text-cyan' : 'text-rose')}">${node.status === 'online' ? 'LIVE' : (node.status === 'syncing' ? 'SYNCING...' : 'OFFLINE')}</span>
         </div>
       </div>
     `;
@@ -558,7 +558,7 @@ function renderFleetComparisonGrid() {
             node.agentVersion === CURRENT_WEB_VERSION
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
               : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
-          ) : ''}
+          ) : (node.status === 'syncing' ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25);">Syncing...</span>` : '')}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
         </div>
       </div>
@@ -673,8 +673,20 @@ function updateActiveNodeBanner() {
   document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel}${agentVerTxt} • Endpoint: ${node.endpoint}`;
   
   const isOnline = node.status === 'online';
-  document.getElementById('meta-status').textContent = isOnline ? 'ONLINE (LIVE)' : 'OFFLINE';
-  document.getElementById('meta-status').className = `meta-val ${isOnline ? 'text-emerald' : 'text-rose'}`;
+  const isSyncing = node.status === 'syncing';
+
+  const metaStatusEl = document.getElementById('meta-status');
+  if (isOnline) {
+    metaStatusEl.textContent = 'ONLINE (LIVE)';
+    metaStatusEl.className = 'meta-val text-emerald';
+  } else if (isSyncing) {
+    metaStatusEl.textContent = 'CONNECTING...';
+    metaStatusEl.className = 'meta-val text-cyan';
+  } else {
+    metaStatusEl.textContent = 'OFFLINE';
+    metaStatusEl.className = 'meta-val text-rose';
+  }
+
   document.getElementById('meta-uptime').textContent = isOnline ? formatUptime(node.uptime) : '--:--:--';
   document.getElementById('meta-ping').textContent = isOnline ? `${node.ping} ms` : '--';
   document.getElementById('cpu-name').textContent = node.cpuModel;
@@ -687,7 +699,13 @@ function updateActiveNodeBanner() {
   const alertLastSeen = document.getElementById('alert-last-seen');
   const metaScheduler = document.getElementById('meta-scheduler');
 
-  if (!isOnline) {
+  if (isSyncing) {
+    if (alertBanner) alertBanner.style.display = 'none';
+    if (metaScheduler) {
+      metaScheduler.textContent = 'CONNECTING...';
+      metaScheduler.className = 'meta-val text-cyan';
+    }
+  } else if (!isOnline) {
     // If MQTT clients are still connecting during initial page load/refresh, keep alert banner quiet
     const isMqttConnecting = !mqttFleetClients.some(c => c && c.connected);
     if (isMqttConnecting) {
@@ -763,7 +781,16 @@ function updateActiveNodeBanner() {
   const metaAgentVer = document.getElementById('meta-agent-version');
   const metaAgentPill = document.getElementById('meta-agent-version-pill');
   if (metaAgentVer) {
-    if (!isOnline || !node.liveSynced) {
+    if (isSyncing) {
+      metaAgentVer.textContent = `v${CURRENT_WEB_VERSION} (Syncing...)`;
+      metaAgentVer.className = 'meta-val font-mono text-cyan';
+      if (metaAgentPill) {
+        metaAgentPill.style.borderColor = '';
+        metaAgentPill.style.background = '';
+        metaAgentPill.style.cursor = 'default';
+        metaAgentPill.onclick = null;
+      }
+    } else if (!isOnline || !node.liveSynced) {
       metaAgentVer.textContent = node.agentVersion ? `v${node.agentVersion}` : '--';
       metaAgentVer.className = 'meta-val font-mono';
       if (metaAgentPill) {
@@ -783,7 +810,7 @@ function updateActiveNodeBanner() {
         metaAgentPill.onclick = () => openOutdatedModal(node);
       }
     } else {
-      metaAgentVer.textContent = node.agentVersion ? `v${node.agentVersion} 🟢` : `v${CURRENT_WEB_VERSION} 🟢`;
+      metaAgentVer.textContent = `v${node.agentVersion || CURRENT_WEB_VERSION} 🟢`;
       metaAgentVer.className = 'meta-val font-mono text-emerald';
       if (metaAgentPill) {
         metaAgentPill.style.borderColor = '';
