@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.1';
-const EXPECTED_AGENT_VERSION = '4.7.1';
+const CURRENT_WEB_VERSION = '4.7.2';
+const EXPECTED_AGENT_VERSION = '4.7.2';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -167,9 +167,11 @@ function saveAliases() {
 
 function getNodeDisplayName(node) {
   if (!node) return 'Unknown Computer';
-  if (nodeAliases[node.id]) return nodeAliases[node.id];
+  const mId = (node.machineId || '').trim().toLowerCase();
+  if (mId && nodeAliases[mId]) return nodeAliases[mId];
+  if (node.id && nodeAliases[node.id]) return nodeAliases[node.id];
+  if (node.alias && typeof node.alias === 'string' && node.alias.trim()) return node.alias.trim();
   if (node.name && nodeAliases[node.name]) return nodeAliases[node.name];
-  if (node.alias && node.alias.trim()) return node.alias.trim();
   return node.name || 'Unknown Computer';
 }
 
@@ -178,14 +180,17 @@ async function setNodeAlias(nodeId, newAlias) {
   if (!node) return;
   const trimmed = (newAlias || '').trim();
   const displayName = trimmed || node.name;
+  const mId = (node.machineId || '').trim().toLowerCase();
 
   if (trimmed) {
     nodeAliases[node.id] = trimmed;
     if (node.name) nodeAliases[node.name] = trimmed;
+    if (mId) nodeAliases[mId] = trimmed;
     node.alias = trimmed;
   } else {
     delete nodeAliases[node.id];
     if (node.name) delete nodeAliases[node.name];
+    if (mId) delete nodeAliases[mId];
     delete node.alias;
   }
   saveAliases();
@@ -205,6 +210,107 @@ async function setNodeAlias(nodeId, newAlias) {
   }
 }
 
+function removeNode(nodeId) {
+  const node = state.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+  const dispName = getNodeDisplayName(node);
+  const mId = (node.machineId || '').trim().toLowerCase();
+
+  state.nodes = state.nodes.filter(n => n.id !== nodeId);
+  if (state.nodes.length === 0) {
+    state.nodes = DEFAULT_NODES;
+    state.selectedNodeId = 'node-local';
+  } else if (state.selectedNodeId === nodeId) {
+    state.selectedNodeId = state.nodes[0].id;
+  }
+
+  delete nodeAliases[nodeId];
+  if (node.name) delete nodeAliases[node.name];
+  if (mId) delete nodeAliases[mId];
+  saveAliases();
+  saveNodes();
+
+  showToast(`Computer [${dispName}] removed from fleet.`);
+  renderFleetBar();
+  updateActiveNodeBanner();
+  updateDetailedView();
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+  }
+}
+
+function cleanupAndDedupNodes() {
+  if (!Array.isArray(state.nodes) || state.nodes.length === 0) {
+    state.nodes = DEFAULT_NODES;
+    return;
+  }
+
+  const result = [];
+  const seenMachineIds = new Map();
+  const seenHostnames = new Map();
+
+  for (const node of state.nodes) {
+    if (!node || !node.name) continue;
+    const mId = (node.machineId || '').trim().toLowerCase();
+    const host = (node.rawHostname || node.name || '').trim().toLowerCase();
+
+    // 1. Deduplicate by unique hardware machineId (100% collision-free)
+    if (mId) {
+      if (seenMachineIds.has(mId)) {
+        const existing = seenMachineIds.get(mId);
+        if (node.status === 'online' && existing.status !== 'online') {
+          const idx = result.indexOf(existing);
+          if (idx !== -1) result[idx] = node;
+          seenMachineIds.set(mId, node);
+          if (host) seenHostnames.set(host, node);
+        }
+        continue;
+      }
+      seenMachineIds.set(mId, node);
+    }
+
+    // 2. Deduplicate identical hostnames where one is offline or lacks machineId
+    if (host && seenHostnames.has(host)) {
+      const existing = seenHostnames.get(host);
+      if (node.status === 'online' && existing.status !== 'online') {
+        const idx = result.indexOf(existing);
+        if (idx !== -1) result[idx] = node;
+        seenHostnames.set(host, node);
+        if (mId) seenMachineIds.set(mId, node);
+        continue;
+      } else if (existing.status === 'online' && node.status !== 'online') {
+        continue;
+      } else if (!existing.machineId && node.machineId) {
+        const idx = result.indexOf(existing);
+        if (idx !== -1) result[idx] = node;
+        seenHostnames.set(host, node);
+        seenMachineIds.set(node.machineId.toLowerCase(), node);
+        continue;
+      } else if (existing.machineId && !node.machineId) {
+        continue;
+      }
+    }
+
+    if (host) seenHostnames.set(host, node);
+    result.push(node);
+  }
+
+  // Remove initial placeholder 'node-local' if real online machines exist
+  if (result.length > 1 && result.some(n => n.id !== 'node-local' && n.status === 'online')) {
+    const placeholderIdx = result.findIndex(n => n.id === 'node-local' && n.status !== 'online');
+    if (placeholderIdx !== -1) {
+      result.splice(placeholderIdx, 1);
+    }
+  }
+
+  state.nodes = result.length > 0 ? result : DEFAULT_NODES;
+
+  if (!state.nodes.some(n => n.id === state.selectedNodeId)) {
+    const online = state.nodes.find(n => n.status === 'online');
+    state.selectedNodeId = online ? online.id : state.nodes[0].id;
+  }
+}
+
 function loadSavedNodes() {
   try {
     const raw = localStorage.getItem('cm_real_nodes_v1');
@@ -212,19 +318,29 @@ function loadSavedNodes() {
     let list = JSON.parse(raw);
     if (!Array.isArray(list) || list.length === 0) return DEFAULT_NODES;
 
-    // Deduplicate any nodes by (hostname + alias)
-    const seen = new Map();
+    // Deduplicate on initial load
+    const seenMId = new Map();
+    const seenHost = new Map();
     const deduped = [];
+
     for (const node of list) {
       if (!node || !node.name) continue;
-      const h = (node.rawHostname || node.name || '').toLowerCase();
-      const a = (node.alias || node.name || '').toLowerCase();
-      const key = `${h}::${a}`;
-      if (!seen.has(key)) {
-        seen.set(key, true);
-        deduped.push(node);
+      const mId = (node.machineId || '').trim().toLowerCase();
+      const h = (node.rawHostname || node.name || '').trim().toLowerCase();
+
+      if (mId) {
+        if (seenMId.has(mId)) continue;
+        seenMId.set(mId, true);
       }
+      if (h) {
+        const a = (node.alias || nodeAliases[node.id] || node.name || '').trim().toLowerCase();
+        const key = `${h}::${a}`;
+        if (seenHost.has(key)) continue;
+        seenHost.set(key, true);
+      }
+      deduped.push(node);
     }
+
     list = deduped.length > 0 ? deduped : DEFAULT_NODES;
 
     for (const node of list) {
@@ -311,7 +427,7 @@ function saveNodes() {
 // Cloud Fleet Telemetry Ingestion (Zero-IP Automatic Sync)
 function handleIncomingNodeTelemetry(data) {
   if (!data || !data.hostname) return;
-  const hostname = data.hostname;
+  const hostname = data.hostname.trim();
   const alias = (data.alias && typeof data.alias === 'string') ? data.alias.trim() : '';
   const machineId = (data.machine_id || data.guid || '').trim();
 
@@ -326,37 +442,33 @@ function handleIncomingNodeTelemetry(data) {
   }
 
   // Robust node matching:
-  // 1. Match by machineId if present
+  // 1. Primary: Match by hardware machineId (100% collision-free)
   let node = machineId ? state.nodes.find(n => n.machineId && n.machineId.toLowerCase() === machineId.toLowerCase()) : null;
 
-  // 2. Match by exact nodeId (hostname + alias)
+  // 2. Match by exact nodeId
   if (!node) {
     node = state.nodes.find(n => n.id === nodeId);
   }
   
-  // 3. Match by exact alias if alias exists
-  if (!node && alias) {
-    node = state.nodes.find(n => n.alias && n.alias.toLowerCase() === alias.toLowerCase());
-  }
-
-  // 4. Match unaliased legacy node with the same hostname
+  // 3. Match by hostname if existing node lacks machineId or is offline (prevents duplicate ghost nodes on rename/reconnect)
   if (!node) {
     node = state.nodes.find(n => {
       const isSameHost = (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
                          (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
                          (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
       if (!isSameHost) return false;
-      return !n.alias || n.alias.toLowerCase() === hostname.toLowerCase() || (alias && n.alias.toLowerCase() === alias.toLowerCase());
+      if (!n.machineId || n.status !== 'online') return true;
+      return (alias && n.alias && n.alias.toLowerCase() === alias.toLowerCase());
     });
   }
 
-  // 5. Match offline initial placeholder
+  // 4. Match offline initial placeholder
   if (!node) {
-    node = state.nodes.find(n => n.id === 'node-local' && n.status === 'offline');
+    node = state.nodes.find(n => n.id === 'node-local' && n.status !== 'online');
   }
 
   if (node) {
-    // Smoothly update ID to the unique nodeKey format if migrating from legacy ID
+    // Smoothly update ID to canonical hardware node ID
     if (node.id !== nodeId) {
       if (state.selectedNodeId === node.id) {
         state.selectedNodeId = nodeId;
@@ -406,7 +518,6 @@ function handleIncomingNodeTelemetry(data) {
     } else {
       state.nodes.push(node);
     }
-    saveNodes();
     showToast(`⚡ Computer Connected to Fleet: [${alias || hostname}]`);
   }
 
@@ -421,6 +532,10 @@ function handleIncomingNodeTelemetry(data) {
     node.alias = data.alias.trim();
     if (nodeAliases[node.id] && nodeAliases[node.id] !== node.alias) {
       nodeAliases[node.id] = node.alias;
+      saveAliases();
+    }
+    if (machineId && nodeAliases[machineId.toLowerCase()] !== node.alias) {
+      nodeAliases[machineId.toLowerCase()] = node.alias;
       saveAliases();
     }
   }
@@ -456,6 +571,10 @@ function handleIncomingNodeTelemetry(data) {
   }
   if (data.processes) node.processes = data.processes;
   if (data.process_groups) node.processGroups = data.process_groups;
+
+  // Run automated deduplication to purge any ghost / offline duplicate entries
+  cleanupAndDedupNodes();
+  saveNodes();
 
   // Refresh UI
   renderFleetBar();
@@ -570,7 +689,10 @@ function renderFleetBar() {
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
           </div>
         </div>
-        <span class="node-status-pill ${node.status}">${node.status === 'syncing' ? 'SYNCING' : node.status.toUpperCase()}</span>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span class="node-status-pill ${node.status}">${node.status === 'syncing' ? 'SYNCING' : node.status.toUpperCase()}</span>
+          ${node.status === 'offline' ? `<button class="btn-remove-node" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 4px; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; cursor: pointer; line-height: 1;">✕</button>` : ''}
+        </div>
       </div>
       <div class="node-card-stats">
         <div class="node-mini-stat">
@@ -587,6 +709,14 @@ function renderFleetBar() {
         </div>
       </div>
     `;
+
+    const btnRemove = card.querySelector('.btn-remove-node');
+    if (btnRemove) {
+      btnRemove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeNode(node.id);
+      });
+    }
 
     card.addEventListener('click', () => {
       selectNode(node.id);
@@ -621,6 +751,7 @@ function renderFleetComparisonGrid() {
               : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
           ) : (node.status === 'syncing' ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25);">Syncing...</span>` : '')}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+          ${node.status === 'offline' ? `<button class="btn-comp-remove" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; font-weight: bold; cursor: pointer;">✕</button>` : ''}
         </div>
       </div>
 
@@ -686,6 +817,14 @@ function renderFleetComparisonGrid() {
       btnCompRename.addEventListener('click', (e) => {
         e.stopPropagation();
         openRenameModal(node.id);
+      });
+    }
+
+    const btnCompRemove = card.querySelector('.btn-comp-remove');
+    if (btnCompRemove) {
+      btnCompRemove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeNode(node.id);
       });
     }
 

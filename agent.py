@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.1"
+AGENT_VERSION = "4.7.2"
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -712,7 +712,7 @@ def handle_remote_command(msg_bytes):
                         pass
         elif action == 'set_alias':
             new_alias = str(data.get('alias') or '').strip()
-            for d in (PROGRAM_DATA_DIR, BASE_DIR):
+            for d in get_config_dirs():
                 try:
                     os.makedirs(d, exist_ok=True)
                     with open(os.path.join(d, 'alias.txt'), 'w', encoding='utf-8') as f:
