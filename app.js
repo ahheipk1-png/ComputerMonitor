@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.3';
-const EXPECTED_AGENT_VERSION = '4.7.3';
+const CURRENT_WEB_VERSION = '4.7.4';
+const EXPECTED_AGENT_VERSION = '4.7.4';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -860,8 +860,8 @@ function renderFleetBar() {
               <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
               ${node.status === 'online' ? (
                 node.agentVersion === CURRENT_WEB_VERSION
-                  ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); flex-shrink: 0;" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
-                  : `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); flex-shrink: 0; font-weight: 700;" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
+                  ? `<span class="node-agent-ver node-agent-ver-latest" title="Agent v${node.agentVersion} (Latest 🟢)">v${escapeHtml(node.agentVersion)}</span>`
+                  : `<span class="node-agent-ver node-agent-ver-outdated" title="Outdated Agent (v${node.agentVersion || 'Older'})! Click for instructions">⚠️ v${escapeHtml(node.agentVersion || 'Old')}</span>`
               ) : (node.status === 'syncing' ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.25); flex-shrink: 0;" title="Syncing telemetry...">v${CURRENT_WEB_VERSION}</span>` : '')}
             </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
@@ -929,7 +929,7 @@ function renderFleetComparisonGrid() {
           ${node.status === 'online' ? (
             node.agentVersion === CURRENT_WEB_VERSION
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
-              : `<button class="btn-comp-outdated" data-id="${node.id}" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(245, 158, 11, 0.22); color: #fbbf24; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.5); cursor: pointer;" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
+              : `<button class="btn-comp-outdated" data-id="${node.id}" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
           ) : (node.status === 'syncing' ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25);">Syncing...</span>` : '')}
           <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
           ${node.status === 'offline' ? `<button class="btn-comp-remove" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; font-weight: bold; cursor: pointer;">✕</button>` : ''}

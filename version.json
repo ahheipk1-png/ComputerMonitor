@@ -1,7 +1,7 @@
 {
-  "version": "4.7.3",
-  "build_timestamp": 1789950000,
+  "version": "4.7.4",
+  "build_timestamp": 1789955000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Live interactive lock countdown timer in dashboard with real-time countdown badges and 1-click cancel lock controls",
+  "release_notes": "High-contrast theme-aware styling for lock countdown banner, countdown badges, and cancel controls in light and dark modes",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

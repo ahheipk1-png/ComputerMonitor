@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.3"
+AGENT_VERSION = "4.7.4"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
