@@ -25,6 +25,8 @@ EXE_NAME = "ComputerMonitorAgent.exe"
 TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
+APP_VERSION = "4.5.0"
+VERSION_CHECK_URL = "https://computermonitor.pages.dev/version.json"
 
 # Base directory where files live (handle PyInstaller frozen mode)
 if getattr(sys, 'frozen', False):
@@ -274,6 +276,14 @@ class App(tk.Tk):
         self.btn_save_alias = tk.Button(row5, text="💾 Save", font=("Segoe UI", 8, "bold"), bg="#3b82f6", fg="#ffffff", activebackground="#2563eb", activeforeground="#ffffff", relief="flat", padx=6, pady=1, cursor="hand2", command=self.save_alias)
         self.btn_save_alias.pack(side="left")
 
+        # 6. Fleet Version Status
+        row6 = tk.Frame(status_box, bg="#1e293b")
+        row6.pack(fill="x", pady=4)
+        tk.Label(row6, text="Fleet Version:", font=("Segoe UI", 9, "bold"), fg="#cbd5e1", bg="#1e293b", width=18, anchor="w").pack(side="left")
+        self.lbl_version_status = tk.Label(row6, text=f"v{APP_VERSION} (Checking...)", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b")
+        self.lbl_version_status.pack(side="left", padx=(18, 6))
+        self.btn_update_now = tk.Button(row6, text="⬇️ Update Now", font=("Segoe UI", 8, "bold"), bg="#f59e0b", fg="#0f172a", activebackground="#d97706", activeforeground="#000000", relief="flat", padx=6, pady=1, cursor="hand2", command=self.perform_update)
+
         # Actions Section
         actions_box = tk.LabelFrame(body_frame, text=" Actions & Controls ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=14, pady=12, bd=1, relief="solid")
         actions_box.pack(fill="x", pady=(0, 14))
@@ -326,6 +336,86 @@ class App(tk.Tk):
         self.txt_log.pack(fill="both", expand=True)
 
         self.log("Control Center initialized. Checking status...")
+        self.start_version_checker()
+
+    def start_version_checker(self):
+        def loop():
+            while True:
+                try:
+                    req = urllib.request.Request(
+                        f"{VERSION_CHECK_URL}?_t={int(time.time())}",
+                        headers={'User-Agent': f'ComputerMonitorControl/{APP_VERSION}'}
+                    )
+                    with urllib.request.urlopen(req, timeout=4) as resp:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        cloud_ver = str(data.get('version', '')).strip()
+                        if cloud_ver:
+                            self.after(0, lambda v=cloud_ver: self.on_version_checked(v))
+                except Exception:
+                    pass
+                time.sleep(120)
+
+        threading.Thread(target=loop, daemon=True).start()
+
+    def on_version_checked(self, cloud_ver):
+        if cloud_ver == APP_VERSION:
+            self.lbl_version_status.config(text=f"v{APP_VERSION} (Latest 🟢)", fg="#10b981")
+            self.btn_update_now.pack_forget()
+        else:
+            self.lbl_version_status.config(text=f"v{APP_VERSION} (Update: v{cloud_ver} ⚠️)", fg="#f59e0b")
+            self.btn_update_now.pack(side="left", padx=(18, 6))
+
+    def perform_update(self):
+        if not messagebox.askyesno("Update Agent", f"A new version of ComputerMonitor is available.\n\nWould you like to download and install the update now?"):
+            return
+
+        self.log("Starting update download from cloud...")
+        self.btn_update_now.config(state="disabled", text="⏳ Updating...")
+
+        def run_update():
+            try:
+                # 1. Download updated agent binary
+                dl_url = f"{DASHBOARD_URL}/{EXE_NAME}"
+                temp_exe = os.path.join(BASE_DIR, f"{EXE_NAME}.new")
+                self.log(f"Downloading from {dl_url}...")
+                urllib.request.urlretrieve(dl_url, temp_exe)
+
+                # 2. Stop existing agent
+                self.log("Stopping old agent...")
+                self.stop_agent()
+                time.sleep(1.0)
+
+                # 3. Replace executable
+                target_exe = os.path.join(BASE_DIR, EXE_NAME)
+                old_backup = os.path.join(BASE_DIR, f"{EXE_NAME}.bak")
+                if os.path.exists(target_exe):
+                    try:
+                        if os.path.exists(old_backup):
+                            os.remove(old_backup)
+                        os.rename(target_exe, old_backup)
+                    except Exception:
+                        pass
+                os.rename(temp_exe, target_exe)
+
+                # 4. If system-wide task exists in ProgramData, update that too
+                if os.path.exists(PROGRAM_DATA_DIR):
+                    pdata_target = os.path.join(PROGRAM_DATA_DIR, EXE_NAME)
+                    try:
+                        import shutil
+                        shutil.copy2(target_exe, pdata_target)
+                    except Exception:
+                        pass
+
+                self.log("Update installed successfully! Restarting agent...")
+                self.start_agent()
+                messagebox.showinfo("Update Complete", "ComputerMonitor Agent has been updated to the latest version!")
+            except Exception as err:
+                self.log(f"Update failed: {err}")
+                messagebox.showerror("Update Error", f"Failed to update agent: {err}")
+            finally:
+                self.btn_update_now.config(state="normal", text="⬇️ Update Now")
+
+        threading.Thread(target=run_update, daemon=True).start()
 
     def log(self, msg):
         timestamp = time.strftime("%H:%M:%S")

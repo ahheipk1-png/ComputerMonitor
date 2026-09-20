@@ -34,6 +34,37 @@ const DEFAULT_NODES = [
   }
 ];
 
+// Centralized Version Control & Automatic Cloud Sync
+const CURRENT_WEB_VERSION = '4.5.0';
+let isReloadingForUpdate = false;
+
+async function checkCloudWebVersion() {
+  if (isReloadingForUpdate) return;
+  try {
+    const res = await fetch(`/version.json?_t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const cloudVer = (data.version || '').trim();
+    if (cloudVer && cloudVer !== CURRENT_WEB_VERSION) {
+      isReloadingForUpdate = true;
+      console.log(`[Version Sync] Newer version deployed: v${cloudVer} (Running: v${CURRENT_WEB_VERSION}). Auto-updating...`);
+      showToast(`⚡ Fleet Update Detected: v${cloudVer} • Syncing latest version...`);
+      const badge = document.getElementById('app-version-badge');
+      if (badge) {
+        badge.textContent = `Fleet v${cloudVer} (Syncing...)`;
+        badge.style.background = 'rgba(16, 185, 129, 0.25)';
+        badge.style.color = '#34d399';
+      }
+      setTimeout(() => {
+        window.location.reload(true);
+      }, 1500);
+    }
+  } catch (_) {}
+}
+
+// Check version immediately on initial script execution
+checkCloudWebVersion();
+
 // Fleet Identifier Resolution
 const urlParams = new URLSearchParams(window.location.search);
 let fleetId = urlParams.get('fleet') || localStorage.getItem('cm_fleet_id') || 'ahheipk1';
@@ -318,6 +349,7 @@ function handleIncomingNodeTelemetry(data) {
     }
   }
   if (data.ip) node.ip = data.ip;
+  if (data.agent_version) node.agentVersion = data.agent_version;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
   if (data.os) {
     node.os = data.os;
@@ -452,7 +484,10 @@ function renderFleetBar() {
         <div class="node-card-brand" style="min-width: 0; flex: 1;">
           <span class="node-os-icon">${node.osIcon || '💻'}</span>
           <div style="min-width: 0; flex: 1; overflow: hidden;">
-            <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
+            <div style="display: flex; align-items: center; gap: 4px; overflow: hidden;">
+              <span class="node-card-name" title="${escapeHtml(dispName)} (${escapeHtml(node.name)})">${escapeHtml(dispName)}</span>
+              ${node.agentVersion ? `<span class="node-agent-ver" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.25); flex-shrink: 0;" title="Agent Version">v${escapeHtml(node.agentVersion)}</span>` : ''}
+            </div>
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
           </div>
         </div>
@@ -592,7 +627,8 @@ function updateActiveNodeBanner() {
   const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
 
   document.getElementById('active-node-name').textContent = dispName;
-  document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel} • Endpoint: ${node.endpoint}`;
+  const agentVerTxt = node.agentVersion ? ` • Agent: v${node.agentVersion}` : '';
+  document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel}${agentVerTxt} • Endpoint: ${node.endpoint}`;
   
   const isOnline = node.status === 'online';
   document.getElementById('meta-status').textContent = isOnline ? 'ONLINE (LIVE)' : 'OFFLINE';
@@ -1792,6 +1828,10 @@ function startAppServices() {
   pollRealFleet();
   if (!fleetPollInterval) {
     fleetPollInterval = setInterval(pollRealFleet, 1500);
+  }
+  checkCloudWebVersion();
+  if (!window._versionSyncInterval) {
+    window._versionSyncInterval = setInterval(checkCloudWebVersion, 45000);
   }
 }
 

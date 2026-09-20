@@ -1,0 +1,7 @@
+{
+  "version": "4.5.0",
+  "build_timestamp": 1789928500,
+  "min_supported_agent": "4.0.0",
+  "release_notes": "Unified fleet version sync and auto-reconnect engine",
+  "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
+}

@@ -78,6 +78,8 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
+AGENT_VERSION = "4.5.0"
+
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
     'system', 'system idle process', 'registry', 'smss.exe', 'csrss.exe',
@@ -87,6 +89,7 @@ PROTECTED_PROCESSES = {
 
 # Global thread-safe metrics cache
 LATEST_METRICS = {
+    'agent_version': AGENT_VERSION,
     'hostname': platform.node(),
     'os': f"{platform.system()} {platform.release()}",
     'arch': platform.machine(),
@@ -202,6 +205,7 @@ def background_metrics_collector():
                 cached_sched = check_task_scheduler()
 
             m = {
+                'agent_version': AGENT_VERSION,
                 'hostname': platform.node(),
                 'alias': get_computer_alias(),
                 'os': f"{platform.system()} {platform.release()}",
@@ -402,17 +406,25 @@ class PureMqttClient:
         try:
             header = self.sock.recv(1)
             if not header:
+                self.close()
                 return None
             pkt_type = header[0] >> 4
             multiplier = 1
             rem_len = 0
             while True:
-                b = self.sock.recv(1)[0]
+                b_arr = self.sock.recv(1)
+                if not b_arr:
+                    self.close()
+                    return None
+                b = b_arr[0]
                 rem_len += (b & 0x7F) * multiplier
                 multiplier *= 128
                 if (b & 0x80) == 0:
                     break
             data = self._recv_exact(rem_len)
+            if not data and rem_len > 0:
+                self.close()
+                return None
             if pkt_type == 3:
                 topic_len = struct.unpack('!H', data[:2])[0]
                 topic = data[2:2+topic_len].decode('utf-8', errors='ignore')
@@ -441,6 +453,7 @@ class PureMqttClient:
         while len(data) < n:
             chunk = self.sock.recv(n - len(data))
             if not chunk:
+                self.close()
                 break
             data.extend(chunk)
         return bytes(data)
@@ -849,6 +862,14 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': 'Not Found'}).encode('utf-8'))
 
     def do_GET(self):
+        if self.path == '/version':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'version': AGENT_VERSION, 'status': 'ok'}).encode('utf-8'))
+            return
+
         if self.path == '/metrics':
             try:
                 with METRICS_LOCK:
