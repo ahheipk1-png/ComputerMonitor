@@ -1611,9 +1611,231 @@ function setupEvents() {
     });
   }
 
+  // Lock Dashboard button
+  const btnLock = document.getElementById('btn-lock-dashboard');
+  if (btnLock) {
+    btnLock.addEventListener('click', lockDashboard);
+  }
+
+  // Change Password Modal Listeners
+  const btnChangePw = document.getElementById('btn-change-password');
+  const changePwModal = document.getElementById('change-password-modal');
+  const closeChangePwModal = document.getElementById('change-password-modal-close');
+  const btnCancelChangePw = document.getElementById('btn-cancel-change-pw');
+  const changePwForm = document.getElementById('change-password-form');
+  const changePwError = document.getElementById('change-pw-error');
+
+  function openChangePwModal() {
+    if (changePwError) changePwError.style.display = 'none';
+    if (changePwForm) changePwForm.reset();
+    if (changePwModal) changePwModal.classList.add('active');
+  }
+
+  function closeChangePwModalFunc() {
+    if (changePwModal) changePwModal.classList.remove('active');
+  }
+
+  if (btnChangePw) btnChangePw.addEventListener('click', openChangePwModal);
+  if (closeChangePwModal) closeChangePwModal.addEventListener('click', closeChangePwModalFunc);
+  if (btnCancelChangePw) btnCancelChangePw.addEventListener('click', closeChangePwModalFunc);
+  if (changePwModal) {
+    changePwModal.addEventListener('click', (e) => {
+      if (e.target === changePwModal) closeChangePwModalFunc();
+    });
+  }
+
+  if (changePwForm) {
+    changePwForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const current = document.getElementById('pw-current').value;
+      const newPw = document.getElementById('pw-new').value;
+      const confirmPw = document.getElementById('pw-confirm').value;
+
+      const currentHash = await sha256Hex(current);
+      const masterHash = getMasterPasswordHash();
+
+      if (currentHash !== masterHash && currentHash !== DEFAULT_AUTH_HASH) {
+        if (changePwError) {
+          changePwError.textContent = '⚠️ Current master password is incorrect.';
+          changePwError.style.display = 'block';
+        }
+        return;
+      }
+
+      if (newPw.length < 4) {
+        if (changePwError) {
+          changePwError.textContent = '⚠️ New password must be at least 4 characters.';
+          changePwError.style.display = 'block';
+        }
+        return;
+      }
+
+      if (newPw !== confirmPw) {
+        if (changePwError) {
+          changePwError.textContent = '⚠️ New passwords do not match.';
+          changePwError.style.display = 'block';
+        }
+        return;
+      }
+
+      const newHash = await sha256Hex(newPw);
+      localStorage.setItem('cm_auth_hash', newHash);
+      closeChangePwModalFunc();
+      showToast('🔑 Master Password Updated Successfully!');
+    });
+  }
+
   window.addEventListener('resize', () => {
     updateDetailedView();
   });
+}
+
+// ==========================================================================
+// Dashboard Authentication Gatekeeper (Master Password Protection)
+// ==========================================================================
+const DEFAULT_AUTH_HASH = 'bc19dadd3091a378cb09f6da74830d9868b08469ad4d840bd129baba1ae1e023'; // sha256('ahheipk1')
+
+async function sha256Hex(text) {
+  if (window.crypto && window.crypto.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) - h) + text.charCodeAt(i);
+    h |= 0;
+  }
+  return 'fb_' + Math.abs(h);
+}
+
+function getMasterPasswordHash() {
+  return localStorage.getItem('cm_auth_hash') || DEFAULT_AUTH_HASH;
+}
+
+function isAuthenticated() {
+  return sessionStorage.getItem('cm_authenticated') === 'true' ||
+         localStorage.getItem('cm_authenticated_persistent') === 'true';
+}
+
+let appServicesStarted = false;
+let fleetPollInterval = null;
+
+function startAppServices() {
+  if (appServicesStarted) return;
+  appServicesStarted = true;
+  checkUrlAutoConnect();
+  renderFleetBar();
+  updateActiveNodeBanner();
+  updateDetailedView();
+  initMqttFleet();
+  pollRealFleet();
+  if (!fleetPollInterval) {
+    fleetPollInterval = setInterval(pollRealFleet, 1500);
+  }
+}
+
+function stopAppServices() {
+  appServicesStarted = false;
+  if (fleetPollInterval) {
+    clearInterval(fleetPollInterval);
+    fleetPollInterval = null;
+  }
+  if (mqttFleetClients && mqttFleetClients.length) {
+    mqttFleetClients.forEach(c => {
+      try { c.end(true); } catch (_) {}
+    });
+    mqttFleetClients = [];
+    mqttFleetClient = null;
+  }
+}
+
+function lockDashboard() {
+  sessionStorage.removeItem('cm_authenticated');
+  localStorage.removeItem('cm_authenticated_persistent');
+  stopAppServices();
+  const gate = document.getElementById('lock-screen-gate');
+  const pwInput = document.getElementById('lock-password-input');
+  const errEl = document.getElementById('lock-error-msg');
+  if (errEl) errEl.style.display = 'none';
+  if (pwInput) {
+    pwInput.value = '';
+    setTimeout(() => pwInput.focus(), 200);
+  }
+  if (gate) gate.classList.remove('unlocked');
+  showToast('🔒 Dashboard Locked');
+}
+
+function unlockDashboard(persistent = true) {
+  sessionStorage.setItem('cm_authenticated', 'true');
+  if (persistent) {
+    localStorage.setItem('cm_authenticated_persistent', 'true');
+  } else {
+    localStorage.removeItem('cm_authenticated_persistent');
+  }
+  const gate = document.getElementById('lock-screen-gate');
+  if (gate) gate.classList.add('unlocked');
+  startAppServices();
+  showToast('🔓 Access Granted • Welcome to Fleet Commander');
+}
+
+function initAuthGate() {
+  const gate = document.getElementById('lock-screen-gate');
+  const form = document.getElementById('lock-screen-form');
+  const pwInput = document.getElementById('lock-password-input');
+  const rememberCheck = document.getElementById('lock-remember-check');
+  const toggleBtn = document.getElementById('btn-toggle-lock-pw');
+  const errEl = document.getElementById('lock-error-msg');
+  const lockCard = document.querySelector('.lock-screen-card');
+
+  if (toggleBtn && pwInput) {
+    toggleBtn.addEventListener('click', () => {
+      pwInput.type = pwInput.type === 'password' ? 'text' : 'password';
+      toggleBtn.textContent = pwInput.type === 'password' ? '👁️' : '🙈';
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const entered = (pwInput ? pwInput.value : '').trim();
+      if (!entered) return;
+
+      const hash = await sha256Hex(entered);
+      const masterHash = getMasterPasswordHash();
+
+      // Check against current master hash OR default initial password
+      if (hash === masterHash || hash === DEFAULT_AUTH_HASH) {
+        if (errEl) errEl.style.display = 'none';
+        const isPersistent = rememberCheck ? rememberCheck.checked : true;
+        unlockDashboard(isPersistent);
+      } else {
+        if (lockCard) {
+          lockCard.classList.remove('lock-shake');
+          void lockCard.offsetWidth; // trigger reflow
+          lockCard.classList.add('lock-shake');
+        }
+        if (errEl) {
+          errEl.textContent = '⚠️ Incorrect Master Password. Please try again.';
+          errEl.style.display = 'block';
+        }
+        if (pwInput) {
+          pwInput.select();
+          pwInput.focus();
+        }
+      }
+    });
+  }
+
+  if (isAuthenticated()) {
+    if (gate) gate.classList.add('unlocked');
+    startAppServices();
+  } else {
+    if (gate) gate.classList.remove('unlocked');
+    if (pwInput) setTimeout(() => pwInput.focus(), 150);
+  }
 }
 
 // Check URL parameters for instant node auto-connection (e.g. ?ip=192.168.10.117)
@@ -1677,15 +1899,5 @@ function checkUrlAutoConnect() {
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupEvents();
-  checkUrlAutoConnect();
-  renderFleetBar();
-  updateActiveNodeBanner();
-  updateDetailedView();
-
-  // Initialize Global Zero-IP Fleet Cloud Stream
-  initMqttFleet();
-
-  // Initial poll and recurring loop
-  pollRealFleet();
-  setInterval(pollRealFleet, 1500);
+  initAuthGate();
 });

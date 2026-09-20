@@ -7,11 +7,53 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.2">
+  <link rel="stylesheet" href="styles.css?v=3.3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>🖥️</text></svg>">
 </head>
 <body>
-  <div class="app-container">
+  <!-- Lock Screen Front Page (Gatekeeper) -->
+  <div id="lock-screen-gate" class="lock-screen-overlay">
+    <div class="lock-screen-card">
+      <div class="lock-brand">
+        <div class="lock-icon-shield">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <rect x="9" y="11" width="6" height="4" rx="1"></rect>
+          </svg>
+        </div>
+        <h2>ComputerMonitor</h2>
+        <p class="lock-subtitle">Fleet Commander Access &bull; Protected Terminal</p>
+      </div>
+
+      <form id="lock-screen-form" class="lock-form" autocomplete="off">
+        <div class="lock-input-group">
+          <label for="lock-password-input">Master Password</label>
+          <div class="lock-input-wrapper">
+            <input type="password" id="lock-password-input" placeholder="Enter master password..." required autofocus autocomplete="current-password">
+            <button type="button" id="btn-toggle-lock-pw" class="btn-toggle-pw" title="Show/Hide password">👁️</button>
+          </div>
+        </div>
+
+        <div class="lock-options">
+          <label class="lock-remember-label">
+            <input type="checkbox" id="lock-remember-check" checked>
+            <span>Remember on this device</span>
+          </label>
+        </div>
+
+        <div id="lock-error-msg" class="lock-error-msg" style="display: none;"></div>
+
+        <button type="submit" id="btn-unlock-dashboard" class="btn-unlock">
+          <span>🔓 Unlock Dashboard</span>
+        </button>
+      </form>
+      <div class="lock-footer">
+        <span>Protected with SHA-256 Client-Side Encryption</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" id="app-container">
     <!-- Header / Nav -->
     <header class="header">
       <div class="brand">
@@ -33,6 +75,14 @@
         <button class="theme-toggle-btn" id="btn-theme-toggle" title="Switch Theme">
           <span id="theme-toggle-icon">🌙</span>
           <span id="theme-toggle-text">Dark Mode</span>
+        </button>
+
+        <button class="toggle-btn" id="btn-lock-dashboard" title="Lock Dashboard (Logout)" style="display: inline-flex; align-items: center; gap: 5px; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          <span>🔒 Lock</span>
+        </button>
+
+        <button class="toggle-btn" id="btn-change-password" title="Change Master Password" style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+          <span>🔑 Key</span>
         </button>
 
         <div class="view-mode-toggle">
@@ -697,10 +747,47 @@
     </div>
   </div>
 
+  <!-- Change Master Password Modal -->
+  <div class="modal-overlay" id="change-password-modal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap" style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.3rem;">🔑</span>
+          <h3>Change Master Password</h3>
+        </div>
+        <button class="modal-close" id="change-password-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">
+          Update the master password used to unlock and secure this dashboard.
+        </p>
+        <form id="change-password-form" class="modal-form">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="pw-current">Current Password</label>
+            <input type="password" id="pw-current" required placeholder="Enter current master password">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="pw-new">New Password</label>
+            <input type="password" id="pw-new" required minlength="4" placeholder="Enter new password (min 4 characters)">
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label for="pw-confirm">Confirm New Password</label>
+            <input type="password" id="pw-confirm" required placeholder="Confirm new password">
+          </div>
+          <div id="change-pw-error" style="color: var(--rose); font-size: 0.85rem; margin-bottom: 12px; display: none;"></div>
+          <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" class="btn-cancel" id="btn-cancel-change-pw">Cancel</button>
+            <button type="submit" class="btn-primary">Update Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.1"></script>
+  <script src="app.js?v=4.2"></script>
 </body>
 </html>
