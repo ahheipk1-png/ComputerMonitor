@@ -35,7 +35,7 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.5.0';
+const CURRENT_WEB_VERSION = '4.6.0';
 let isReloadingForUpdate = false;
 
 async function checkCloudWebVersion() {
@@ -583,6 +583,9 @@ function renderFleetComparisonGrid() {
 
       <div style="display: flex; gap: 8px; margin-top: 14px;">
         <button class="btn-comp-drill" data-id="${node.id}" style="flex: 1;">Drilldown Detailed Telemetry &rarr;</button>
+        <button class="btn-comp-lock" data-id="${node.id}" title="Lock ${escapeHtml(dispName)} (return to login screen)">
+          <span>🔒 Lock</span>
+        </button>
         <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${escapeHtml(dispName)}">
           <span>🔄 Restart</span>
         </button>
@@ -599,6 +602,14 @@ function renderFleetComparisonGrid() {
       btnCompRename.addEventListener('click', (e) => {
         e.stopPropagation();
         openRenameModal(node.id);
+      });
+    }
+
+    const btnLock = card.querySelector('.btn-comp-lock');
+    if (btnLock) {
+      btnLock.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLockModal(node.id);
       });
     }
 
@@ -936,6 +947,88 @@ async function executeRestartComputer() {
       const data = await res.json();
       if (res.ok && data.success) {
         showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
+      }
+    } catch (_) {}
+  }
+}
+
+let pendingLockNodeId = null;
+
+function openLockModal(nodeId) {
+  pendingLockNodeId = nodeId;
+  const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
+  const nameEl = document.getElementById('lock-target-node');
+  if (nameEl) nameEl.textContent = `${getNodeDisplayName(node)} (${node.rawHostname || node.name || 'Remote PC'})`;
+
+  const modal = document.getElementById('lock-computer-modal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeLockModal() {
+  pendingLockNodeId = null;
+  const modal = document.getElementById('lock-computer-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function executeLockComputer() {
+  if (!pendingLockNodeId) return;
+  const node = state.nodes.find(n => n.id === pendingLockNodeId) || getActiveNode();
+  closeLockModal();
+
+  const targetHost = node.rawHostname || node.name;
+  const dispName = getNodeDisplayName(node);
+
+  // 1. Dispatch over MQTT Cloud Fleet channel
+  const rawHosts = [
+    node.rawHostname,
+    node.name,
+    node.hostname,
+    node.alias,
+    nodeAliases[node.id],
+    node.id ? node.id.replace(/^node-/, '') : null,
+  ].filter(h => h && typeof h === 'string' && h.trim());
+
+  const targetHosts = Array.from(new Set([
+    ...rawHosts,
+    ...rawHosts.map(h => h.toLowerCase()),
+    ...rawHosts.map(h => h.toUpperCase()),
+  ]));
+
+  let anySent = false;
+  targetHosts.forEach(th => {
+    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
+    if (publishFleetCommand(cmdTopic, {
+      action: 'lock'
+    })) {
+      anySent = true;
+    }
+  });
+
+  if (anySent) {
+    showToast(`🔒 Workstation lock signal dispatched to [${dispName}]...`);
+  }
+
+  // 2. Direct HTTP fallback if endpoint is HTTP
+  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
+  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
+    ? node.endpoint.replace(/\/metrics\/?$/, '') 
+    : (ip ? `http://${ip}:5500` : null);
+
+  if (baseUrl) {
+    const lockUrl = `${baseUrl}/lock`;
+    try {
+      const res = await fetch(lockUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'lock' }),
+        signal: AbortSignal.timeout(6000)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`🔒 ${data.message || `Workstation locked! ${node.name} returned to login screen.`}`);
       }
     } catch (_) {}
   }
@@ -1622,6 +1715,34 @@ function setupEvents() {
   }
   if (btnConfirmRestart) {
     btnConfirmRestart.addEventListener('click', executeRestartComputer);
+  }
+
+  // Lock Computer Modal Listeners
+  const btnLockComp = document.getElementById('btn-lock-computer');
+  const btnCloseLockModal = document.getElementById('lock-modal-close');
+  const btnCancelLock = document.getElementById('btn-cancel-lock');
+  const btnConfirmLock = document.getElementById('btn-confirm-lock');
+  const lockModal = document.getElementById('lock-computer-modal');
+
+  if (btnLockComp) {
+    btnLockComp.addEventListener('click', () => {
+      openLockModal(state.selectedNodeId);
+    });
+  }
+
+  if (btnCloseLockModal) {
+    btnCloseLockModal.addEventListener('click', closeLockModal);
+  }
+  if (btnCancelLock) {
+    btnCancelLock.addEventListener('click', closeLockModal);
+  }
+  if (lockModal) {
+    lockModal.addEventListener('click', (e) => {
+      if (e.target === lockModal) closeLockModal();
+    });
+  }
+  if (btnConfirmLock) {
+    btnConfirmLock.addEventListener('click', executeLockComputer);
   }
 
   // Rename Computer Modal Listeners

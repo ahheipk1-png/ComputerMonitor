@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.5.0"
+AGENT_VERSION = "4.6.0"
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -511,6 +511,17 @@ def handle_remote_command(msg_bytes):
                 subprocess.Popen([shutdown_bin, '/r', '/f', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'], creationflags=creationflags)
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
+        elif action == 'lock':
+            if platform.system() == 'Windows':
+                try:
+                    import ctypes
+                    ctypes.windll.user32.LockWorkStation()
+                except Exception:
+                    pass
+            elif platform.system() == 'Darwin':
+                subprocess.Popen(['pmset', 'displaysleepnow'])
+            else:
+                subprocess.Popen(['xdg-screensaver', 'lock'])
         elif action == 'kill':
             val = str(data.get('val') or data.get('identifier') or data.get('name') or data.get('pid') or '').strip()
             is_pid = data.get('isPid', False)
@@ -825,6 +836,37 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': success, 'message': msg}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
+
+        elif self.path in ('/lock', '/lock-computer'):
+            try:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'message': 'Workstation lock sequence initiated successfully.'
+                }).encode('utf-8'))
+                self.wfile.flush()
+
+                def execute_lock():
+                    time.sleep(0.3)
+                    if platform.system() == 'Windows':
+                        try:
+                            import ctypes
+                            ctypes.windll.user32.LockWorkStation()
+                        except Exception:
+                            pass
+                    elif platform.system() == 'Darwin':
+                        subprocess.run(['pmset', 'displaysleepnow'], check=False)
+                    else:
+                        subprocess.run(['xdg-screensaver', 'lock'], check=False)
+
+                threading.Thread(target=execute_lock, daemon=True).start()
                 return
             except Exception as e:
                 self.send_response(500)

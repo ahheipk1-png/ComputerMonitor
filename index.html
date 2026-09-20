@@ -175,6 +175,13 @@
             </svg>
             <span>Restart</span>
           </button>
+          <button class="btn-lock-pc" id="btn-lock-computer" title="Lock this computer (return to login screen)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>Lock</span>
+          </button>
           <button class="btn-toggle-metrics" id="btn-toggle-all-metrics" title="Expand or collapse all telemetry metric cards">
             <span>⊞ Expand All Cards</span>
           </button>
@@ -721,6 +728,30 @@
     </div>
   </div>
 
+  <!-- Lock Computer Modal -->
+  <div class="modal-overlay" id="lock-computer-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🔒 Lock Computer</h3>
+        <button class="modal-close" id="lock-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.5;">
+          Are you sure you want to lock <strong id="lock-target-node" class="text-cyan">Selected Computer</strong>?
+        </p>
+        <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.84rem; color: #a5b4fc; line-height: 1.45;">
+          🔒 <strong>Secure Lock:</strong> This will immediately send the workstation back to the Windows / OS login screen requiring your password or PIN to unlock. All your open applications, background tasks, and unsaved work will remain active and running safely.
+        </div>
+        <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn-cancel" id="btn-cancel-lock">Cancel</button>
+          <button type="button" class="btn-primary" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-color: transparent;" id="btn-confirm-lock">
+            <span>🔒 Yes, Lock Computer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Rename Computer Modal -->
   <div class="modal-overlay" id="rename-computer-modal">
     <div class="modal-content" style="max-width: 440px;">
@@ -788,6 +819,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.5"></script>
+  <script src="app.js?v=4.6"></script>
 </body>
 </html>

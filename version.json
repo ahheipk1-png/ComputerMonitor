@@ -1,7 +1,7 @@
 {
-  "version": "4.5.0",
-  "build_timestamp": 1789928500,
+  "version": "4.6.0",
+  "build_timestamp": 1789934000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Unified fleet version sync and auto-reconnect engine",
+  "release_notes": "Remote workstation lock feature (instant lock to login screen without terminating apps)",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

@@ -25,7 +25,7 @@ EXE_NAME = "ComputerMonitorAgent.exe"
 TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
-APP_VERSION = "4.5.0"
+APP_VERSION = "4.6.0"
 VERSION_CHECK_URL = "https://computermonitor.pages.dev/version.json"
 
 # Base directory where files live (handle PyInstaller frozen mode)
@@ -308,9 +308,15 @@ class App(tk.Tk):
         btn_grid.columnconfigure(0, weight=1)
         btn_grid.columnconfigure(1, weight=1)
 
-        # Open Dashboard Button
-        btn_dash = tk.Button(actions_box, text="🌐 Open Fleet Dashboard (Website)", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=8, cursor="hand2", command=self.open_dashboard)
-        btn_dash.pack(fill="x", pady=(8, 0))
+        # Lock Workstation & Open Dashboard Buttons
+        btn_action_row = tk.Frame(actions_box, bg="#1e293b")
+        btn_action_row.pack(fill="x", pady=(8, 0))
+
+        btn_lock = tk.Button(btn_action_row, text="🔒 Lock Workstation", font=("Segoe UI", 9, "bold"), bg="#4f46e5", fg="#ffffff", activebackground="#4338ca", activeforeground="#ffffff", relief="flat", pady=7, cursor="hand2", command=self.lock_workstation)
+        btn_lock.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        btn_dash = tk.Button(btn_action_row, text="🌐 Open Dashboard", font=("Segoe UI", 9, "bold"), bg="#7c3aed", fg="#ffffff", activebackground="#6d28d9", activeforeground="#ffffff", relief="flat", pady=7, cursor="hand2", command=self.open_dashboard)
+        btn_dash.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
         # Stop Specific Process Section
         kill_box = tk.LabelFrame(body_frame, text=" Stop Specific Process ", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#1e293b", padx=12, pady=10, bd=1, relief="solid")
@@ -538,6 +544,17 @@ class App(tk.Tk):
         url = f"{DASHBOARD_URL}/?fleet={fleet}"
         self.log(f"Opening fleet dashboard: {url}")
         webbrowser.open(url)
+
+    def lock_workstation(self):
+        try:
+            if platform.system() == 'Windows':
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+                self.log("🔒 Workstation locked (returned to Windows login screen).")
+            else:
+                self.log("Lock is only supported natively on Windows.")
+        except Exception as e:
+            self.log(f"Lock error: {e}")
 
     def start_agent(self):
         if not ensure_agent_exe():
