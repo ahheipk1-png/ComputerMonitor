@@ -1323,6 +1323,7 @@ function setupEvents() {
     addForm.reset();
     pollRealFleet();
   });
+}
 
   // Help Modal
   const agentModal = document.getElementById('agent-modal');
