@@ -1,7 +1,7 @@
 {
-  "version": "4.7.2",
-  "build_timestamp": 1789945000,
+  "version": "4.7.3",
+  "build_timestamp": 1789950000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Hardware MachineGuid persistent keying, automated ghost instance deduplication, and 1-click offline node removal",
+  "release_notes": "Live interactive lock countdown timer in dashboard with real-time countdown badges and 1-click cancel lock controls",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

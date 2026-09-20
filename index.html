@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.3">
+  <link rel="stylesheet" href="styles.css?v=4.7.3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>🖥️</text></svg>">
 </head>
 <body>
@@ -66,7 +66,7 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>ComputerMonitor <span class="badge-tag" id="app-version-badge">Fleet v4.7.2</span></h1>
+          <h1>ComputerMonitor <span class="badge-tag" id="app-version-badge">Fleet v4.7.3</span></h1>
           <p class="subtitle">Multi-Machine Cluster & Real-Time Telemetry</p>
         </div>
       </div>
@@ -140,6 +140,16 @@
         <div class="alert-meta font-mono" id="alert-last-seen">Last Seen: Never</div>
       </div>
 
+      <!-- Scheduled Lock Active Countdown Banner -->
+      <div class="scheduled-lock-banner" id="scheduled-lock-banner" style="display: none;">
+        <div class="lock-banner-icon">⏱️</div>
+        <div class="lock-banner-content">
+          <strong id="lock-banner-title">Workstation Lock Scheduled</strong>
+          <span id="lock-banner-desc">Target computer will lock in <span class="lock-countdown-clock font-mono" id="lock-banner-timer">05:00</span></span>
+        </div>
+        <button type="button" class="btn-lock-cancel" id="btn-banner-cancel-lock" title="Cancel scheduled lock">✕ Cancel Lock</button>
+      </div>
+
       <!-- Active Node System Meta -->
       <div class="active-node-banner">
         <div class="active-node-info">
@@ -171,7 +181,7 @@
           </div>
           <div class="meta-pill" id="meta-agent-version-pill" title="Hardware Agent Version">
             <span class="meta-label">AGENT</span>
-            <span class="meta-val font-mono" id="meta-agent-version">v4.7.2 🟢</span>
+            <span class="meta-val font-mono" id="meta-agent-version">v4.7.3 🟢</span>
           </div>
           <button class="btn-restart-pc" id="btn-restart-computer" title="Restart this computer remotely">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -179,15 +189,18 @@
             </svg>
             <span>Restart</span>
           </button>
-          <div class="lock-control-group" title="Lock workstation (Optionally enter number of minutes to delay lock)">
+          <div class="lock-control-group" id="lock-control-group" title="Lock workstation (Optionally enter number of minutes to delay lock)">
             <input type="number" id="lock-delay-minutes" class="lock-delay-input" min="0" max="720" value="0" placeholder="0" title="Enter number of minutes to delay lock (0 = immediate)">
-            <span class="lock-delay-label">min</span>
+            <span class="lock-delay-label" id="lock-delay-label">min</span>
             <button class="btn-lock-pc" id="btn-lock-computer" title="Lock this computer (return to login screen)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
               <span id="btn-lock-text">Lock</span>
+            </button>
+            <button type="button" class="btn-lock-cancel" id="btn-header-cancel-lock" title="Cancel scheduled lock" style="display: none;">
+              ✕ Cancel
             </button>
           </div>
           <button class="btn-toggle-metrics" id="btn-toggle-all-metrics" title="Expand or collapse all telemetry metric cards">
@@ -868,6 +881,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.7.2"></script>
+  <script src="app.js?v=4.7.3"></script>
 </body>
 </html>

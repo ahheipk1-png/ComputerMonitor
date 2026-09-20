@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.2';
-const EXPECTED_AGENT_VERSION = '4.7.2';
+const CURRENT_WEB_VERSION = '4.7.3';
+const EXPECTED_AGENT_VERSION = '4.7.3';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -367,7 +367,162 @@ const state = {
   sortCol: 'name',
   sortDir: 'asc',
   expandedGroups: new Set(),
+  scheduledLocks: {}, // Keyed by node ID or machine GUID -> { deadline, delayMinutes, nodeName, machineId }
 };
+
+// Helper to format remaining seconds into MM:SS or HH:MM:SS
+function formatSecondsToMMSS(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+// Retrieve active scheduled lock for a given node (if not expired)
+function getNodeScheduledLock(node) {
+  if (!node) return null;
+  const lock = state.scheduledLocks[node.id] || (node.machineId ? state.scheduledLocks[node.machineId] : null);
+  if (!lock) return null;
+  const rem = Math.max(0, Math.ceil((lock.deadline - Date.now()) / 1000));
+  if (rem <= 0) {
+    delete state.scheduledLocks[node.id];
+    if (node.machineId) delete state.scheduledLocks[node.machineId];
+    return null;
+  }
+  return lock;
+}
+
+// Cancel active delayed workstation lock
+function cancelScheduledLock(nodeId) {
+  const node = (nodeId ? state.nodes.find(n => n.id === nodeId) : null) || getActiveNode();
+  if (!node) return;
+  delete state.scheduledLocks[node.id];
+  if (node.machineId) delete state.scheduledLocks[node.machineId];
+  node.pendingLockDeadline = null;
+
+  sendNodeCommand(node, {
+    action: 'cancel_lock'
+  });
+
+  showToast(`✅ Workstation lock cancelled for [${getNodeDisplayName(node)}]`);
+  updateLockCountdowns();
+  renderFleetBar();
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
+  }
+}
+
+// Global 1-second interval tick updating all lock countdowns in real-time
+function updateLockCountdowns() {
+  const now = Date.now();
+
+  // 1. Expire completed timers
+  Object.keys(state.scheduledLocks).forEach(key => {
+    const lock = state.scheduledLocks[key];
+    if (!lock) return;
+    const rem = Math.max(0, Math.ceil((lock.deadline - now) / 1000));
+    if (rem <= 0) {
+      delete state.scheduledLocks[key];
+      const node = state.nodes.find(n => n.id === key || n.machineId === key);
+      if (node) node.pendingLockDeadline = null;
+      showToast(`🔒 Workstation lock executed on [${lock.nodeName || 'Computer'}]`);
+    }
+  });
+
+  // 2. Update Header Controls & Active Node Banner
+  const activeNode = getActiveNode();
+  const activeLock = activeNode ? getNodeScheduledLock(activeNode) : null;
+  const banner = document.getElementById('scheduled-lock-banner');
+  const bannerTimer = document.getElementById('lock-banner-timer');
+  const bannerTitle = document.getElementById('lock-banner-title');
+  const btnLockComp = document.getElementById('btn-lock-computer');
+  const btnLockText = document.getElementById('btn-lock-text');
+  const btnCancelLock = document.getElementById('btn-header-cancel-lock');
+  const lockDelayInput = document.getElementById('lock-delay-minutes');
+  const lockDelayLabel = document.getElementById('lock-delay-label');
+
+  if (activeLock) {
+    const rem = Math.max(0, Math.ceil((activeLock.deadline - now) / 1000));
+    const timeStr = formatSecondsToMMSS(rem);
+
+    if (banner) {
+      banner.style.display = 'flex';
+      if (bannerTimer) bannerTimer.textContent = timeStr;
+      if (bannerTitle) bannerTitle.textContent = `Workstation Lock Scheduled for [${getNodeDisplayName(activeNode)}]`;
+    }
+    if (btnLockComp) {
+      btnLockComp.classList.add('has-pending-lock');
+    }
+    if (btnLockText) {
+      btnLockText.textContent = `⏱️ ${timeStr}`;
+    }
+    if (btnCancelLock) {
+      btnCancelLock.style.display = 'inline-flex';
+    }
+    if (lockDelayInput) {
+      lockDelayInput.style.display = 'none';
+    }
+    if (lockDelayLabel) {
+      lockDelayLabel.style.display = 'none';
+    }
+  } else {
+    if (banner) {
+      banner.style.display = 'none';
+    }
+    if (btnLockComp) {
+      btnLockComp.classList.remove('has-pending-lock');
+    }
+    if (btnLockText) {
+      btnLockText.textContent = 'Lock';
+    }
+    if (btnCancelLock) {
+      btnCancelLock.style.display = 'none';
+    }
+    if (lockDelayInput) {
+      lockDelayInput.style.display = '';
+    }
+    if (lockDelayLabel) {
+      lockDelayLabel.style.display = '';
+    }
+  }
+
+  // 3. Update countdown badges in Fleet Bar cards
+  state.nodes.forEach(n => {
+    const lock = getNodeScheduledLock(n);
+    const pill = document.querySelector(`.fleet-lock-badge-${n.id}`);
+    if (pill) {
+      if (lock) {
+        const rem = Math.max(0, Math.ceil((lock.deadline - now) / 1000));
+        pill.textContent = `⏱️ ${formatSecondsToMMSS(rem)}`;
+        pill.style.display = 'inline-flex';
+      } else {
+        pill.style.display = 'none';
+      }
+    }
+
+    const compLockBtn = document.querySelector(`.btn-comp-lock[data-id="${n.id}"]`);
+    if (compLockBtn) {
+      if (lock) {
+        const rem = Math.max(0, Math.ceil((lock.deadline - now) / 1000));
+        compLockBtn.innerHTML = `<span>⏱️ ${formatSecondsToMMSS(rem)} (Cancel)</span>`;
+        compLockBtn.classList.add('has-pending-lock');
+        compLockBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+        compLockBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+        compLockBtn.style.color = '#f87171';
+      } else {
+        compLockBtn.innerHTML = `<span>🔒 Lock</span>`;
+        compLockBtn.classList.remove('has-pending-lock');
+        compLockBtn.style.background = '';
+        compLockBtn.style.borderColor = '';
+        compLockBtn.style.color = '';
+      }
+    }
+  });
+}
 
 // Filter Keywords for Browsers, Roblox, Games, and Autoclickers
 const GAME_BROWSER_CLICKER_KEYWORDS = [
@@ -572,6 +727,24 @@ function handleIncomingNodeTelemetry(data) {
   if (data.processes) node.processes = data.processes;
   if (data.process_groups) node.processGroups = data.process_groups;
 
+  // Sync hardware agent lock timer if active
+  if (data.pending_lock_sec !== undefined && data.pending_lock_sec > 0) {
+    const dl = Date.now() + data.pending_lock_sec * 1000;
+    node.pendingLockDeadline = dl;
+    state.scheduledLocks[node.id] = {
+      deadline: dl,
+      nodeName: getNodeDisplayName(node),
+      machineId: node.machineId || ''
+    };
+    if (node.machineId) {
+      state.scheduledLocks[node.machineId] = state.scheduledLocks[node.id];
+    }
+  } else if (data.pending_lock_sec === 0 || (data.pending_lock_sec === undefined && node.pendingLockDeadline && node.pendingLockDeadline <= Date.now())) {
+    delete state.scheduledLocks[node.id];
+    if (node.machineId) delete state.scheduledLocks[node.machineId];
+    node.pendingLockDeadline = null;
+  }
+
   // Run automated deduplication to purge any ghost / offline duplicate entries
   cleanupAndDedupNodes();
   saveNodes();
@@ -673,6 +846,11 @@ function renderFleetBar() {
     card.dataset.id = node.id;
     const dispName = getNodeDisplayName(node);
     const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
+    const lockInfo = getNodeScheduledLock(node);
+    const lockBadgeHtml = lockInfo
+      ? `<span class="node-lock-countdown-pill fleet-lock-badge-${node.id}" title="Lock in ${formatSecondsToMMSS(Math.max(0, Math.ceil((lockInfo.deadline - Date.now()) / 1000)))}">⏱️ ${formatSecondsToMMSS(Math.max(0, Math.ceil((lockInfo.deadline - Date.now()) / 1000)))}</span>`
+      : `<span class="node-lock-countdown-pill fleet-lock-badge-${node.id}" style="display:none;"></span>`;
+
     card.innerHTML = `
       <div class="node-card-top">
         <div class="node-card-brand" style="min-width: 0; flex: 1;">
@@ -690,6 +868,7 @@ function renderFleetBar() {
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
+          ${lockBadgeHtml}
           <span class="node-status-pill ${node.status}">${node.status === 'syncing' ? 'SYNCING' : node.status.toUpperCase()}</span>
           ${node.status === 'offline' ? `<button class="btn-remove-node" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 4px; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; cursor: pointer; line-height: 1;">✕</button>` : ''}
         </div>
@@ -737,6 +916,8 @@ function renderFleetComparisonGrid() {
     card.className = 'comp-node-card';
     const dispName = getNodeDisplayName(node);
     const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
+    const lockInfo = getNodeScheduledLock(node);
+
     card.innerHTML = `
       <div class="comp-header">
         <div class="comp-title-block">
@@ -798,8 +979,8 @@ function renderFleetComparisonGrid() {
 
       <div style="display: flex; gap: 8px; margin-top: 14px;">
         <button class="btn-comp-drill" data-id="${node.id}" style="flex: 1;">Drilldown Detailed Telemetry &rarr;</button>
-        <button class="btn-comp-lock" data-id="${node.id}" title="Lock ${escapeHtml(dispName)} (return to login screen)">
-          <span>🔒 Lock</span>
+        <button class="btn-comp-lock ${lockInfo ? 'has-pending-lock' : ''}" data-id="${node.id}" style="${lockInfo ? 'background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171;' : ''}" title="${lockInfo ? 'Cancel scheduled workstation lock' : 'Lock ' + escapeHtml(dispName) + ' (return to login screen)'}">
+          ${lockInfo ? `<span>⏱️ ${formatSecondsToMMSS(Math.max(0, Math.ceil((lockInfo.deadline - Date.now()) / 1000)))} (Cancel)</span>` : `<span>🔒 Lock</span>`}
         </button>
         <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${escapeHtml(dispName)}">
           <span>🔄 Restart</span>
@@ -840,7 +1021,11 @@ function renderFleetComparisonGrid() {
     if (btnLock) {
       btnLock.addEventListener('click', (e) => {
         e.stopPropagation();
-        openLockModal(node.id);
+        if (getNodeScheduledLock(node)) {
+          cancelScheduledLock(node.id);
+        } else {
+          openLockModal(node.id);
+        }
       });
     }
 
@@ -1240,6 +1425,24 @@ async function executeLockComputer() {
 
   const dispName = getNodeDisplayName(node);
 
+  if (delayMinutes > 0) {
+    const deadline = Date.now() + delaySeconds * 1000;
+    state.scheduledLocks[node.id] = {
+      deadline: deadline,
+      delayMinutes: delayMinutes,
+      nodeName: dispName,
+      machineId: node.machineId || ''
+    };
+    if (node.machineId) {
+      state.scheduledLocks[node.machineId] = state.scheduledLocks[node.id];
+    }
+    node.pendingLockDeadline = deadline;
+  } else {
+    delete state.scheduledLocks[node.id];
+    if (node.machineId) delete state.scheduledLocks[node.machineId];
+    node.pendingLockDeadline = null;
+  }
+
   // Dispatch exclusively over MQTT Cloud Fleet channel with strict GUID/alias targeting
   const anySent = sendNodeCommand(node, {
     action: 'lock',
@@ -1254,6 +1457,12 @@ async function executeLockComputer() {
     } else {
       showToast(`🔒 Workstation lock signal dispatched to [${dispName}]...`);
     }
+  }
+
+  updateLockCountdowns();
+  renderFleetBar();
+  if (state.viewMode === 'fleet') {
+    renderFleetComparisonGrid();
   }
 }
 
@@ -2019,7 +2228,28 @@ function setupEvents() {
 
   if (btnLockComp) {
     btnLockComp.addEventListener('click', () => {
-      openLockModal(state.selectedNodeId);
+      const activeNode = getActiveNode();
+      if (activeNode && getNodeScheduledLock(activeNode)) {
+        cancelScheduledLock(activeNode.id);
+      } else {
+        openLockModal(state.selectedNodeId);
+      }
+    });
+  }
+
+  const btnHeaderCancelLock = document.getElementById('btn-header-cancel-lock');
+  if (btnHeaderCancelLock) {
+    btnHeaderCancelLock.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cancelScheduledLock(state.selectedNodeId);
+    });
+  }
+
+  const btnBannerCancelLock = document.getElementById('btn-banner-cancel-lock');
+  if (btnBannerCancelLock) {
+    btnBannerCancelLock.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cancelScheduledLock(state.selectedNodeId);
     });
   }
 
@@ -2263,6 +2493,9 @@ function startAppServices() {
   checkCloudWebVersion();
   if (!window._versionSyncInterval) {
     window._versionSyncInterval = setInterval(checkCloudWebVersion, 45000);
+  }
+  if (!window._lockCountdownInterval) {
+    window._lockCountdownInterval = setInterval(updateLockCountdowns, 1000);
   }
 }
 

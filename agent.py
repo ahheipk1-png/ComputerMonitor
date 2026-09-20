@@ -78,7 +78,12 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.2"
+AGENT_VERSION = "4.7.3"
+
+# Lock Timer State for Delayed Workstation Locking
+CURRENT_LOCK_EVENT = None
+LOCK_DEADLINE = 0
+LOCK_LOCK = threading.Lock()
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -374,6 +379,12 @@ def background_metrics_collector():
                 m['process_groups'] = []
                 m['processes'] = []
 
+            with LOCK_LOCK:
+                if LOCK_DEADLINE > 0:
+                    rem_lock = max(0, int(LOCK_DEADLINE - time.time()))
+                    if rem_lock > 0:
+                        m['pending_lock_sec'] = rem_lock
+
             with METRICS_LOCK:
                 LATEST_METRICS = m
 
@@ -573,6 +584,47 @@ def execute_system_lock():
         subprocess.Popen(['xdg-screensaver', 'lock'])
 
 
+def schedule_delayed_lock(delay_sec):
+    """Schedule workstation lock after delay_sec seconds with support for cancellation."""
+    global CURRENT_LOCK_EVENT, LOCK_DEADLINE
+    with LOCK_LOCK:
+        if CURRENT_LOCK_EVENT:
+            CURRENT_LOCK_EVENT.set()
+        if delay_sec <= 0:
+            CURRENT_LOCK_EVENT = None
+            LOCK_DEADLINE = 0
+            execute_system_lock()
+            return
+
+        evt = threading.Event()
+        CURRENT_LOCK_EVENT = evt
+        LOCK_DEADLINE = time.time() + delay_sec
+
+    def delayed_lock_worker(event_obj, sec):
+        global CURRENT_LOCK_EVENT, LOCK_DEADLINE
+        cancelled = event_obj.wait(timeout=sec)
+        if not cancelled:
+            execute_system_lock()
+        with LOCK_LOCK:
+            if CURRENT_LOCK_EVENT == event_obj:
+                CURRENT_LOCK_EVENT = None
+                LOCK_DEADLINE = 0
+
+    threading.Thread(target=delayed_lock_worker, args=(evt, delay_sec), daemon=True).start()
+
+
+def cancel_delayed_lock():
+    """Cancel any pending delayed workstation lock timer."""
+    global CURRENT_LOCK_EVENT, LOCK_DEADLINE
+    with LOCK_LOCK:
+        if CURRENT_LOCK_EVENT:
+            CURRENT_LOCK_EVENT.set()
+            CURRENT_LOCK_EVENT = None
+            LOCK_DEADLINE = 0
+            return True
+        return False
+
+
 def trigger_agent_update():
     """Download the latest ComputerMonitorAgent.exe and restart."""
     try:
@@ -669,13 +721,9 @@ def handle_remote_command(msg_bytes):
                 except Exception:
                     pass
 
-            if lock_delay_sec > 0:
-                def delayed_lock_worker(sec):
-                    time.sleep(sec)
-                    execute_system_lock()
-                threading.Thread(target=delayed_lock_worker, args=(lock_delay_sec,), daemon=True).start()
-            else:
-                execute_system_lock()
+            schedule_delayed_lock(lock_delay_sec)
+        elif action in ('cancel_lock', 'cancel-lock'):
+            cancel_delayed_lock()
         elif action == 'update':
             threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':
@@ -1006,19 +1054,43 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
 
         elif self.path in ('/lock', '/lock-computer'):
             try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8') if length > 0 else ''
+                data = json.loads(body) if body else {}
+                delay_sec = 0
+                if 'delay_seconds' in data:
+                    delay_sec = max(0, int(data['delay_seconds']))
+                elif 'delay_minutes' in data:
+                    delay_sec = max(0, int(float(data['delay_minutes']) * 60))
+                elif 'delay' in data:
+                    delay_sec = max(0, int(data['delay']))
+
+                schedule_delayed_lock(delay_sec)
+
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     'success': True,
-                    'message': 'Workstation lock sequence initiated successfully.'
+                    'delay_seconds': delay_sec,
+                    'message': f"Workstation lock scheduled in {delay_sec} seconds." if delay_sec > 0 else "Workstation lock sequence initiated."
                 }).encode('utf-8'))
-                self.wfile.flush()
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
 
-                def execute_lock():
-                    time.sleep(0.3)
-                    execute_system_lock()
-
-                threading.Thread(target=execute_lock, daemon=True).start()
+        elif self.path in ('/cancel-lock', '/cancel_lock'):
+            try:
+                cancelled = cancel_delayed_lock()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'cancelled': cancelled,
+                    'message': 'Scheduled lock cancelled.' if cancelled else 'No scheduled lock was active.'
+                }).encode('utf-8'))
                 return
             except Exception as e:
                 self.send_response(500)
