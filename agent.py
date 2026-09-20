@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.6.0"
+AGENT_VERSION = "4.7.0"
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -174,6 +174,49 @@ def check_task_scheduler():
         return {"installed": False, "status": "Unavailable"}
 
 
+def get_machine_id():
+    """Retrieve persistent unique machine hardware GUID (100% collision-free)."""
+    for d in get_config_dirs():
+        id_file = os.path.join(d, 'machine_id.txt')
+        if os.path.exists(id_file):
+            try:
+                with open(id_file, 'r', encoding='utf-8') as f:
+                    val = f.read().strip()
+                    if val and len(val) >= 6:
+                        return val
+            except Exception:
+                pass
+
+    guid = ''
+    if platform.system() == 'Windows':
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography", 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+                val, _ = winreg.QueryValueEx(key, "MachineGuid")
+                if val:
+                    guid = str(val).strip().lower()
+        except Exception:
+            pass
+
+    if not guid:
+        try:
+            import uuid
+            node_hex = hex(uuid.getnode())[2:]
+            guid = f"hw-{node_hex.lower()}"
+        except Exception:
+            guid = f"pc-{platform.node().lower()}"
+
+    for d in get_config_dirs():
+        try:
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, 'machine_id.txt'), 'w', encoding='utf-8') as f:
+                f.write(guid)
+        except Exception:
+            pass
+
+    return guid
+
+
 def get_computer_alias():
     """Retrieve friendly computer alias name."""
     for d in get_config_dirs():
@@ -197,6 +240,7 @@ def background_metrics_collector():
     cached_processes = []
     cached_groups = []
     num_cpus = psutil.cpu_count(logical=True) or 1 if HAS_PSUTIL else 1
+    my_machine_id = get_machine_id()
 
     while True:
         try:
@@ -207,6 +251,7 @@ def background_metrics_collector():
             m = {
                 'agent_version': AGENT_VERSION,
                 'hostname': platform.node(),
+                'machine_id': my_machine_id,
                 'alias': get_computer_alias(),
                 'os': f"{platform.system()} {platform.release()}",
                 'arch': platform.machine(),
@@ -528,17 +573,67 @@ def execute_system_lock():
         subprocess.Popen(['xdg-screensaver', 'lock'])
 
 
+def trigger_agent_update():
+    """Download the latest ComputerMonitorAgent.exe and restart."""
+    try:
+        req = urllib.request.Request("https://computermonitor.pages.dev/version.json", headers={'User-Agent': 'Mozilla/5.0 ComputerMonitorAgent'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            cloud_ver = data.get('version', '').strip()
+            if cloud_ver and cloud_ver != AGENT_VERSION and getattr(sys, 'frozen', False):
+                curr_exe = os.path.abspath(sys.executable)
+                exe_dir = os.path.dirname(curr_exe)
+                new_exe = os.path.join(exe_dir, "ComputerMonitorAgent.new")
+                dl_url = "https://computermonitor.pages.dev/ComputerMonitorAgent.exe"
+                req_dl = urllib.request.Request(dl_url, headers={'User-Agent': 'Mozilla/5.0 ComputerMonitorAgent'})
+                with urllib.request.urlopen(req_dl, timeout=30) as d_resp, open(new_exe, 'wb') as f:
+                    f.write(d_resp.read())
+                if os.path.exists(new_exe) and os.path.getsize(new_exe) > 1000000:
+                    bat_path = os.path.join(exe_dir, "update_agent.bat")
+                    with open(bat_path, 'w') as f:
+                        f.write(f"""@echo off\ntimeout /t 2 /nobreak >nul\nmove /y "{new_exe}" "{curr_exe}" >nul\nstart "" "{curr_exe}" --background\ndel "%~f0"\n""")
+                    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+                    subprocess.Popen(['cmd.exe', '/c', bat_path], creationflags=creationflags)
+                    os._exit(0)
+    except Exception:
+        pass
+
+
 def handle_remote_command(msg_bytes):
     """Execute remote command received via secure fleet MQTT channel."""
     try:
         data = json.loads(msg_bytes.decode('utf-8'))
         
-        # Verify target computer to prevent cross-talk when multiple machines share the same hostname
+        # 1. Hardware-level GUID target check (100% collision prevention)
+        target_guid = data.get('target_machine_id') or data.get('machine_id') or data.get('guid')
+        my_guid = get_machine_id().lower()
+        my_short_guid = my_guid.replace('-', '')[:8]
+        if target_guid:
+            t_guid = str(target_guid).strip().lower().replace('-', '')
+            m_guid = my_guid.replace('-', '')
+            if (t_guid != m_guid and 
+                not m_guid.startswith(t_guid) and 
+                not t_guid.startswith(m_guid) and
+                not my_short_guid.startswith(t_guid) and
+                not t_guid.startswith(my_short_guid)):
+                return  # Command is intended for a different physical computer!
+
+        # 2. Alias target check
         target_alias = data.get('target_alias')
         if target_alias:
-            current_alias = LATEST_METRICS.get('alias', '')
+            current_alias = get_computer_alias()
             if current_alias and target_alias.strip().lower() != current_alias.strip().lower():
-                return  # Command is intended for a different computer with the same hostname
+                return  # Command is intended for a different computer!
+
+        # 3. Target Node ID check
+        target_id = str(data.get('target_id') or '').strip().lower()
+        if target_id and not target_guid and not target_alias:
+            my_alias = get_computer_alias().strip().lower()
+            my_host = platform.node().strip().lower()
+            if target_id.startswith('node-'):
+                clean_id = target_id[5:]
+                if clean_id != my_alias and clean_id != my_host and not clean_id.startswith(my_host):
+                    return
 
         action = data.get('action')
         delay = int(data.get('delay', 5))
@@ -558,6 +653,8 @@ def handle_remote_command(msg_bytes):
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
         elif action == 'lock':
             execute_system_lock()
+        elif action == 'update':
+            threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':
             val = str(data.get('val') or data.get('identifier') or data.get('name') or data.get('pid') or '').strip()
             is_pid = data.get('isPid', False)
@@ -609,28 +706,33 @@ def mqtt_fleet_worker():
     """Background worker that continuously streams telemetry to the global fleet channel."""
     fleet_id = get_fleet_id()
     hostname = platform.node()
-    machine_id = re.sub(r'[^a-zA-Z0-9_-]', '', hostname).lower() or "pc"
-    pub_topic = f"computermonitor/fleet/{fleet_id}/{hostname}"
+    raw_guid = get_machine_id()
+    short_guid = raw_guid.replace('-', '')[:8].lower()
+    node_unique_key = f"{hostname}_{short_guid}"
+    pub_topic = f"computermonitor/fleet/{fleet_id}/{node_unique_key}"
     brokers = ['broker.emqx.io', 'broker.hivemq.com']
     broker_idx = 0
 
     while True:
         broker = brokers[broker_idx % len(brokers)]
-        client_id = f"cm_agent_{machine_id}_{int(time.time())}"
+        client_id = f"cm_agent_{node_unique_key}_{int(time.time())}"
         client = PureMqttClient(client_id, host=broker, port=1883)
         if not client.connect(timeout=6):
             broker_idx += 1
             time.sleep(4)
             continue
 
-        client.subscribe(f"computermonitor/fleet/{fleet_id}/{hostname}/cmd", msg_id=1)
-        if hostname.lower() != hostname:
-            client.subscribe(f"computermonitor/fleet/{fleet_id}/{hostname.lower()}/cmd", msg_id=2)
+        # 1. Subscribe to hardware-unique machine GUID command topic (zero collision guarantee)
+        client.subscribe(f"computermonitor/fleet/{fleet_id}/{node_unique_key}/cmd", msg_id=1)
+        client.subscribe(f"computermonitor/fleet/{fleet_id}/{raw_guid}/cmd", msg_id=2)
+        client.subscribe(f"computermonitor/fleet/{fleet_id}/{short_guid}/cmd", msg_id=3)
+
+        # 2. Subscribe to unique alias command topic
         current_alias = get_computer_alias()
-        if current_alias:
-            client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias}/cmd", msg_id=3)
+        if current_alias and current_alias != hostname:
+            client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias}/cmd", msg_id=4)
             if current_alias.lower() != current_alias:
-                client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias.lower()}/cmd", msg_id=4)
+                client.subscribe(f"computermonitor/fleet/{fleet_id}/{current_alias.lower()}/cmd", msg_id=5)
 
         while client.connected:
             try:

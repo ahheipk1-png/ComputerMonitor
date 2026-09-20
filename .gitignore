@@ -5,3 +5,8 @@ __pycache__/
 alias.txt
 *.old.exe
 *.zip
+
+machine_id.txt
+build/
+dist/
+*.spec

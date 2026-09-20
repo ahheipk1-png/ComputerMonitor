@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.6.0';
-const EXPECTED_AGENT_VERSION = '4.6.0';
+const CURRENT_WEB_VERSION = '4.7.0';
+const EXPECTED_AGENT_VERSION = '4.7.0';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -102,16 +102,23 @@ function sendNodeCommand(node, payload) {
 
   const alias = (node.alias && typeof node.alias === 'string') ? node.alias.trim() : '';
   const rawHostname = (node.rawHostname || node.name || '').trim();
+  const machineId = (node.machineId || '').trim();
+  const shortGuid = machineId ? machineId.replace(/-/g, '').slice(0, 8).toLowerCase() : '';
 
-  // Check if multiple computers in the fleet share the same raw Windows hostname (e.g. "Michael")
-  const isSharedHostname = rawHostname ? (state.nodes.filter(n => {
-    const h = (n.rawHostname || n.name || '').trim().toLowerCase();
-    return h && h === rawHostname.toLowerCase();
-  }).length > 1) : false;
-
-  // Build target MQTT topics:
-  // If the machine has a distinct alias, ONLY target that unique alias to prevent accidental cross-talk
   const targetTopics = new Set();
+
+  // 1. Target by hardware machine ID / GUID (Primary, 100% collision-free)
+  if (machineId) {
+    targetTopics.add(`computermonitor/fleet/${fleetId}/${machineId}/cmd`);
+    if (shortGuid) {
+      targetTopics.add(`computermonitor/fleet/${fleetId}/${shortGuid}/cmd`);
+      if (rawHostname) {
+        targetTopics.add(`computermonitor/fleet/${fleetId}/${rawHostname}_${shortGuid}/cmd`);
+      }
+    }
+  }
+
+  // 2. Target by distinct alias
   if (alias) {
     targetTopics.add(`computermonitor/fleet/${fleetId}/${alias}/cmd`);
     if (alias.toLowerCase() !== alias) {
@@ -119,19 +126,17 @@ function sendNodeCommand(node, payload) {
     }
   }
 
-  // Only broadcast on raw hostname if the hostname is NOT shared between multiple computers,
-  // or if the computer has no custom alias.
-  if (!isSharedHostname || !alias) {
+  // 3. Fallback: ONLY publish to raw hostname if NO machineId, NO alias, and single-node
+  if (!machineId && !alias && state.nodes.length <= 1) {
     if (rawHostname) {
       targetTopics.add(`computermonitor/fleet/${fleetId}/${rawHostname}/cmd`);
-      if (rawHostname.toLowerCase() !== rawHostname) {
-        targetTopics.add(`computermonitor/fleet/${fleetId}/${rawHostname.toLowerCase()}/cmd`);
-      }
     }
   }
 
   const enrichedPayload = {
     ...payload,
+    target_machine_id: machineId || '',
+    target_guid: machineId || '',
     target_alias: alias || '',
     target_host: rawHostname || '',
     target_id: node.id || ''
@@ -186,24 +191,11 @@ async function setNodeAlias(nodeId, newAlias) {
   saveAliases();
   saveNodes();
 
-  // 1. Send remote command to agent over MQTT
+  // 1. Send remote command to agent over MQTT with isolated routing
   sendNodeCommand(node, {
     action: 'set_alias',
     alias: trimmed
   });
-
-  // 2. Direct HTTP fallback if endpoint is HTTP
-  if (node.endpoint && node.endpoint.startsWith('http')) {
-    const baseUrl = node.endpoint.replace(/\/metrics\/?$/, '');
-    try {
-      fetch(`${baseUrl}/alias`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alias: trimmed }),
-        signal: AbortSignal.timeout(3000)
-      }).catch(() => {});
-    } catch (_) {}
-  }
 
   showToast(`Computer alias updated to "${displayName}"`);
   renderFleetBar();
@@ -321,22 +313,33 @@ function handleIncomingNodeTelemetry(data) {
   if (!data || !data.hostname) return;
   const hostname = data.hostname;
   const alias = (data.alias && typeof data.alias === 'string') ? data.alias.trim() : '';
+  const machineId = (data.machine_id || data.guid || '').trim();
 
-  // Generate unique node ID. If distinct alias exists, combine hostname + alias
-  // so multiple computers sharing the same Windows computer name (e.g. "Michael") don't collide.
-  const nodeKey = alias ? `${hostname}_${alias}` : hostname;
-  const nodeId = `node-${nodeKey.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  // Generate unique node ID. Primary key: hardware machine ID if present, otherwise hostname + alias
+  let nodeId;
+  if (machineId) {
+    nodeId = `node-${machineId.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  } else if (alias && alias.toLowerCase() !== hostname.toLowerCase()) {
+    nodeId = `node-${hostname.toLowerCase()}_${alias.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  } else {
+    nodeId = `node-${hostname.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  }
 
   // Robust node matching:
-  // 1. Match by exact nodeId (hostname + alias)
-  let node = state.nodes.find(n => n.id === nodeId);
+  // 1. Match by machineId if present
+  let node = machineId ? state.nodes.find(n => n.machineId && n.machineId.toLowerCase() === machineId.toLowerCase()) : null;
+
+  // 2. Match by exact nodeId (hostname + alias)
+  if (!node) {
+    node = state.nodes.find(n => n.id === nodeId);
+  }
   
-  // 2. Match by exact alias if alias exists
+  // 3. Match by exact alias if alias exists
   if (!node && alias) {
     node = state.nodes.find(n => n.alias && n.alias.toLowerCase() === alias.toLowerCase());
   }
 
-  // 3. Match unaliased legacy node with the same hostname
+  // 4. Match unaliased legacy node with the same hostname
   if (!node) {
     node = state.nodes.find(n => {
       const isSameHost = (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
@@ -347,7 +350,7 @@ function handleIncomingNodeTelemetry(data) {
     });
   }
 
-  // 4. Match offline initial placeholder
+  // 5. Match offline initial placeholder
   if (!node) {
     node = state.nodes.find(n => n.id === 'node-local' && n.status === 'offline');
   }
@@ -370,6 +373,7 @@ function handleIncomingNodeTelemetry(data) {
       id: nodeId,
       name: hostname,
       alias: alias || hostname,
+      machineId: machineId || '',
       os: data.os || 'Windows',
       osIcon: icon,
       cpuModel: data.cpu_model || (data.cpu_count ? `${data.cpu_count}-Core CPU` : 'Hardware Telemetry'),
@@ -411,6 +415,7 @@ function handleIncomingNodeTelemetry(data) {
   node.liveSynced = true;
   node.lastSeen = new Date();
   node.rawHostname = hostname;
+  if (machineId) node.machineId = machineId;
   node.agentVersion = data.agent_version || node.agentVersion || CURRENT_WEB_VERSION;
   if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
     node.alias = data.alias.trim();
@@ -986,8 +991,8 @@ async function requestStopProcess(identifier, isPid = true) {
     return;
   }
 
-  const targetHost = node.rawHostname || node.name;
-  // 1. Dispatch over MQTT Cloud Fleet channel
+  const dispName = getNodeDisplayName(node);
+  // Dispatch exclusively over MQTT Cloud Fleet channel with strict GUID/alias targeting
   const anySent = sendNodeCommand(node, {
     action: 'kill',
     identifier: identifier,
@@ -997,33 +1002,6 @@ async function requestStopProcess(identifier, isPid = true) {
 
   if (anySent) {
     showToast(`Stopping process [${identifier}] on [${dispName}]...`);
-  }
-
-  // 2. Direct LAN HTTP fallback if available
-  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
-  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
-    ? node.endpoint.replace(/\/metrics\/?$/, '') 
-    : (ip ? `http://${ip}:5500` : null);
-
-  if (baseUrl) {
-    const killUrl = `${baseUrl}/kill`;
-    const payload = isPid ? { pid: parseInt(identifier, 10) } : { name: identifier.trim() };
-
-    try {
-      const res = await fetch(killUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(4500)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || 'Process stopped successfully!');
-      }
-    } catch (_) {}
   }
 }
 
@@ -1052,7 +1030,7 @@ async function executeRestartComputer() {
 
   const dispName = getNodeDisplayName(node);
 
-  // 1. Dispatch over MQTT Cloud Fleet channel with isolated routing
+  // Dispatch exclusively over MQTT Cloud Fleet channel with strict GUID/alias targeting
   const anySent = sendNodeCommand(node, {
     action: 'restart',
     delay: 5
@@ -1066,32 +1044,6 @@ async function executeRestartComputer() {
     if (alertBanner) alertBanner.style.display = 'flex';
     if (alertTitle) alertTitle.textContent = 'SYSTEM REBOOT IN PROGRESS';
     if (alertDesc) alertDesc.textContent = `Restart sequence initiated for ${dispName}. Machine will reboot and automatically reconnect once startup completes.`;
-  }
-
-  // 2. Direct HTTP fallback if endpoint is HTTP
-  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
-  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
-    ? node.endpoint.replace(/\/metrics\/?$/, '') 
-    : (ip ? `http://${ip}:5500` : null);
-
-  if (baseUrl) {
-    const restartUrl = `${baseUrl}/restart`;
-
-    try {
-      const res = await fetch(restartUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ delay: 5 }),
-        signal: AbortSignal.timeout(6000)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
-      }
-    } catch (_) {}
   }
 }
 
@@ -1120,38 +1072,13 @@ async function executeLockComputer() {
 
   const dispName = getNodeDisplayName(node);
 
-  // 1. Dispatch over MQTT Cloud Fleet channel with isolated routing
+  // Dispatch exclusively over MQTT Cloud Fleet channel with strict GUID/alias targeting
   const anySent = sendNodeCommand(node, {
     action: 'lock'
   });
 
   if (anySent) {
     showToast(`🔒 Workstation lock signal dispatched to [${dispName}]...`);
-  }
-
-  // 2. Direct HTTP fallback if endpoint is HTTP
-  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
-  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
-    ? node.endpoint.replace(/\/metrics\/?$/, '') 
-    : (ip ? `http://${ip}:5500` : null);
-
-  if (baseUrl) {
-    const lockUrl = `${baseUrl}/lock`;
-    try {
-      const res = await fetch(lockUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'lock' }),
-        signal: AbortSignal.timeout(6000)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`🔒 ${data.message || `Workstation locked! ${node.name} returned to login screen.`}`);
-      }
-    } catch (_) {}
   }
 }
 

@@ -25,7 +25,7 @@ EXE_NAME = "ComputerMonitorAgent.exe"
 TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
-APP_VERSION = "4.6.0"
+APP_VERSION = "4.7.0"
 VERSION_CHECK_URL = "https://computermonitor.pages.dev/version.json"
 
 # Base directory where files live (handle PyInstaller frozen mode)
