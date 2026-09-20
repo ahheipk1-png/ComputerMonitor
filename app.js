@@ -127,9 +127,32 @@ async function setNodeAlias(nodeId, newAlias) {
   }
 }
 
+function loadSavedNodes() {
+  try {
+    const raw = localStorage.getItem('cm_real_nodes_v1');
+    if (!raw) return DEFAULT_NODES;
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list) || list.length === 0) return DEFAULT_NODES;
+    const now = Date.now();
+    for (const node of list) {
+      if (node.lastSeen) {
+        node.lastSeen = new Date(node.lastSeen);
+        if (isNaN(node.lastSeen.getTime()) || (now - node.lastSeen.getTime() > 8000)) {
+          node.status = 'offline';
+        }
+      } else {
+        node.status = 'offline';
+      }
+    }
+    return list;
+  } catch (e) {
+    return DEFAULT_NODES;
+  }
+}
+
 // App State
 const state = {
-  nodes: JSON.parse(localStorage.getItem('cm_real_nodes_v1')) || DEFAULT_NODES,
+  nodes: loadSavedNodes(),
   selectedNodeId: 'node-local',
   viewMode: 'detailed',
   searchQuery: '',
@@ -527,7 +550,12 @@ function updateActiveNodeBanner() {
       if (alertTitle) alertTitle.textContent = 'AGENT UNREACHABLE / TASK STOPPED';
       if (alertDesc) alertDesc.textContent = `Host [${node.name}] is offline. Telemetry stopped or the Windows Task Scheduler task was terminated/deleted.`;
     }
-    if (alertLastSeen) alertLastSeen.textContent = node.lastSeen ? `Last Active: ${node.lastSeen.toLocaleTimeString()}` : 'Last Active: Never';
+    const lastSeenDate = node.lastSeen ? new Date(node.lastSeen) : null;
+    if (alertLastSeen) {
+      alertLastSeen.textContent = (lastSeenDate && !isNaN(lastSeenDate.getTime()))
+        ? `Last Active: ${lastSeenDate.toLocaleTimeString()}`
+        : 'Last Active: Never';
+    }
     if (metaScheduler) {
       metaScheduler.textContent = 'STOPPED / UNREACHABLE';
       metaScheduler.className = 'meta-val text-rose';
@@ -1113,12 +1141,16 @@ function updateDetailedView() {
 
 // Poll Real Hardware Agent across all nodes
 async function pollRealFleet() {
+  const now = Date.now();
   for (const node of state.nodes) {
     if (node.endpoint === 'cloud-sync') {
-      if (node.lastSeen && (new Date() - node.lastSeen > 6500)) {
+      const lastSeenMs = node.lastSeen ? new Date(node.lastSeen).getTime() : 0;
+      if (!lastSeenMs || (now - lastSeenMs > 7000)) {
         node.status = 'offline';
-        node.history.cpu.shift();
-        node.history.cpu.push(0);
+        if (node.history && node.history.cpu) {
+          node.history.cpu.shift();
+          node.history.cpu.push(0);
+        }
       }
       continue;
     }
@@ -1196,10 +1228,10 @@ async function pollRealFleet() {
 
   if (active.status === 'online') {
     statusEl.className = 'connection-status online';
-    statusTxt.textContent = `${getNodeDisplayName(active)} (Online)`;
+    statusTxt.textContent = `${getNodeDisplayName(active)} (Live)`;
   } else {
     statusEl.className = 'connection-status';
-    statusTxt.textContent = 'Agent Offline (Run start-agent.bat)';
+    statusTxt.textContent = `${getNodeDisplayName(active)} (Offline)`;
   }
 
   renderFleetBar();
