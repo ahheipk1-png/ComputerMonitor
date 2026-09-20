@@ -498,11 +498,6 @@ def handle_remote_command(msg_bytes):
                 subprocess.Popen([shutdown_bin, '/r', '/f', '/t', str(delay), '/c', 'Restart requested from ComputerMonitor Dashboard'], creationflags=creationflags)
             else:
                 subprocess.Popen(['shutdown', '-r', f'+{max(1, delay // 60)}'])
-        elif action in ('shutdown', 'poweroff'):
-            if platform.system() == 'Windows':
-                subprocess.Popen([shutdown_bin, '/s', '/f', '/t', str(delay), '/c', 'Shutdown requested from ComputerMonitor Dashboard'], creationflags=creationflags)
-            else:
-                subprocess.Popen(['shutdown', '-h', f'+{max(1, delay // 60)}'])
         elif action == 'kill':
             val = str(data.get('val') or data.get('identifier') or data.get('name') or data.get('pid') or '').strip()
             is_pid = data.get('isPid', False)
@@ -793,45 +788,7 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
 
-        elif self.path in ('/shutdown', '/poweroff'):
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = self.rfile.read(length).decode('utf-8') if length > 0 else ''
-                data = json.loads(body) if body else {}
-                delay = int(data.get('delay', 5))
-                delay = max(1, min(delay, 60))
-
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': f"Shutdown initiated successfully. System will power off in {delay} seconds..."
-                }).encode('utf-8'))
-                self.wfile.flush()
-
-                def execute_shutdown():
-                    time.sleep(1.2)
-                    creationflags = 0x08000000 if sys.platform == 'win32' else 0
-                    if platform.system() == 'Windows':
-                        subprocess.run(
-                            ['shutdown', '/s', '/f', '/t', str(delay), '/c', 'Shut down requested from ComputerMonitor Dashboard'],
-                            creationflags=creationflags,
-                            check=False
-                        )
-                    elif platform.system() == 'Darwin':
-                        subprocess.run(['sudo', 'shutdown', '-h', f"+{int(delay/60)}"], check=False)
-                    else:
-                        subprocess.run(['shutdown', '-h', f"+{int(delay/60)}"], check=False)
-
-                threading.Thread(target=execute_shutdown, daemon=True).start()
-                return
-            except Exception as e:
-                self.send_response(500)
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
-                return
-
-        elif self.path in ('/cancel-restart', '/cancel-shutdown'):
+        elif self.path == '/cancel-restart':
             try:
                 creationflags = 0x08000000 if sys.platform == 'win32' else 0
                 if platform.system() == 'Windows':

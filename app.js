@@ -448,9 +448,6 @@ function renderFleetComparisonGrid() {
         <button class="btn-comp-restart" data-id="${node.id}" title="Restart ${escapeHtml(dispName)}">
           <span>🔄 Restart</span>
         </button>
-        <button class="btn-comp-shutdown" data-id="${node.id}" title="Shut Down ${escapeHtml(dispName)}">
-          <span>⏻ Shut Down</span>
-        </button>
       </div>
     `;
 
@@ -472,14 +469,6 @@ function renderFleetComparisonGrid() {
       btnRestart.addEventListener('click', (e) => {
         e.stopPropagation();
         openRestartModal(node.id);
-      });
-    }
-
-    const btnShutdown = card.querySelector('.btn-comp-shutdown');
-    if (btnShutdown) {
-      btnShutdown.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openShutdownModal(node.id);
       });
     }
 
@@ -803,95 +792,6 @@ async function executeRestartComputer() {
       const data = await res.json();
       if (res.ok && data.success) {
         showToast(`🔄 ${data.message || `Restart initiated! ${node.name} is rebooting...`}`);
-      }
-    } catch (_) {}
-  }
-}
-
-let pendingShutdownNodeId = null;
-
-function openShutdownModal(nodeId) {
-  pendingShutdownNodeId = nodeId;
-  const node = state.nodes.find(n => n.id === nodeId) || getActiveNode();
-  const nameEl = document.getElementById('shutdown-target-node');
-  if (nameEl) nameEl.textContent = `${getNodeDisplayName(node)} (${node.rawHostname || node.name || 'Remote PC'})`;
-
-  const modal = document.getElementById('shutdown-computer-modal');
-  if (modal) modal.classList.add('active');
-}
-
-function closeShutdownModal() {
-  pendingShutdownNodeId = null;
-  const modal = document.getElementById('shutdown-computer-modal');
-  if (modal) modal.classList.remove('active');
-}
-
-async function executeShutdownComputer() {
-  if (!pendingShutdownNodeId) return;
-  const node = state.nodes.find(n => n.id === pendingShutdownNodeId) || getActiveNode();
-  closeShutdownModal();
-
-  const dispName = getNodeDisplayName(node);
-
-  // 1. Dispatch over MQTT Cloud Fleet channel
-  const rawHosts = [
-    node.rawHostname,
-    node.name,
-    node.hostname,
-    node.alias,
-    nodeAliases[node.id],
-    node.id ? node.id.replace(/^node-/, '') : null,
-  ].filter(h => h && typeof h === 'string' && h.trim());
-
-  const targetHosts = Array.from(new Set([
-    ...rawHosts,
-    ...rawHosts.map(h => h.toLowerCase()),
-    ...rawHosts.map(h => h.toUpperCase()),
-  ]));
-
-  let anySent = false;
-  targetHosts.forEach(th => {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
-    if (publishFleetCommand(cmdTopic, {
-      action: 'shutdown',
-      delay: 5
-    })) {
-      anySent = true;
-    }
-  });
-
-  if (anySent) {
-    showToast(`⏻ Shut down signal dispatched to [${dispName}]...`);
-    const alertBanner = document.getElementById('agent-alert-banner');
-    const alertTitle = document.getElementById('alert-title');
-    const alertDesc = document.getElementById('alert-desc');
-    if (alertBanner) alertBanner.style.display = 'flex';
-    if (alertTitle) alertTitle.textContent = 'SYSTEM SHUTDOWN IN PROGRESS';
-    if (alertDesc) alertDesc.textContent = `Shutdown sequence initiated for ${dispName}. Machine is powering down.`;
-  }
-
-  // 2. Direct HTTP fallback if endpoint is HTTP
-  const ip = (node.ip && !node.ip.includes('Cloud') && !node.ip.includes('localhost')) ? node.ip : null;
-  const baseUrl = (node.endpoint && node.endpoint.startsWith('http')) 
-    ? node.endpoint.replace(/\/metrics\/?$/, '') 
-    : (ip ? `http://${ip}:5500` : null);
-
-  if (baseUrl) {
-    const shutdownUrl = `${baseUrl}/shutdown`;
-
-    try {
-      const res = await fetch(shutdownUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ delay: 5 }),
-        signal: AbortSignal.timeout(6000)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`⏻ ${data.message || `Shutdown initiated! ${node.name} is shutting down...`}`);
       }
     } catch (_) {}
   }
@@ -1566,34 +1466,6 @@ function setupEvents() {
   }
   if (btnConfirmRestart) {
     btnConfirmRestart.addEventListener('click', executeRestartComputer);
-  }
-
-  // Shut Down Computer Modal Listeners
-  const btnShutdownComp = document.getElementById('btn-shutdown-computer');
-  const btnCloseShutdownModal = document.getElementById('shutdown-modal-close');
-  const btnCancelShutdown = document.getElementById('btn-cancel-shutdown');
-  const btnConfirmShutdown = document.getElementById('btn-confirm-shutdown');
-  const shutdownModal = document.getElementById('shutdown-computer-modal');
-
-  if (btnShutdownComp) {
-    btnShutdownComp.addEventListener('click', () => {
-      openShutdownModal(state.selectedNodeId);
-    });
-  }
-
-  if (btnCloseShutdownModal) {
-    btnCloseShutdownModal.addEventListener('click', closeShutdownModal);
-  }
-  if (btnCancelShutdown) {
-    btnCancelShutdown.addEventListener('click', closeShutdownModal);
-  }
-  if (shutdownModal) {
-    shutdownModal.addEventListener('click', (e) => {
-      if (e.target === shutdownModal) closeShutdownModal();
-    });
-  }
-  if (btnConfirmShutdown) {
-    btnConfirmShutdown.addEventListener('click', executeShutdownComputer);
   }
 
   // Rename Computer Modal Listeners

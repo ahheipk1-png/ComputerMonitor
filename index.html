@@ -154,12 +154,6 @@
             </svg>
             <span>Restart Computer</span>
           </button>
-          <button class="btn-shutdown-pc" id="btn-shutdown-computer" title="Shut down this computer remotely">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>
-            </svg>
-            <span>Shut Down Computer</span>
-          </button>
           <button class="btn-toggle-metrics" id="btn-toggle-all-metrics" title="Expand or collapse all telemetry metric cards">
             <span>⊞ Expand All Cards</span>
           </button>
@@ -707,30 +701,6 @@
     </div>
   </div>
 
-  <!-- Shut Down Computer Modal -->
-  <div class="modal-overlay" id="shutdown-computer-modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>⏻ Shut Down Computer</h3>
-        <button class="modal-close" id="shutdown-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem; line-height: 1.5;">
-          Are you sure you want to completely power off <strong id="shutdown-target-node" class="text-cyan">Selected Computer</strong>?
-        </p>
-        <div style="background: rgba(190, 18, 60, 0.1); border: 1px solid rgba(190, 18, 60, 0.35); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.84rem; color: #be123c; line-height: 1.45;">
-          ⚠️ <strong>Critical Warning:</strong> This will completely shut down the computer. Because it is powered off, you will <strong>NOT</strong> be able to reconnect or turn it back on remotely unless someone physically presses the power button or Wake-on-LAN is configured.
-        </div>
-        <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
-          <button type="button" class="btn-cancel" id="btn-cancel-shutdown">Cancel</button>
-          <button type="button" class="btn-primary" style="background: #be123c; border-color: transparent;" id="btn-confirm-shutdown">
-            <span>⏻ Yes, Shut Down Computer</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Rename Computer Modal -->
   <div class="modal-overlay" id="rename-computer-modal">
     <div class="modal-content" style="max-width: 440px;">
@@ -761,6 +731,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=3.2"></script>
+  <script src="app.js?v=3.3"></script>
 </body>
 </html>
