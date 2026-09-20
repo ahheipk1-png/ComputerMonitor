@@ -1265,11 +1265,18 @@ function setupEvents() {
   const btnCancelNode = document.getElementById('btn-cancel-node');
   const addForm = document.getElementById('add-node-form');
 
-  btnAddNode.addEventListener('click', () => addModal.classList.add('active'));
-  btnCloseAddModal.addEventListener('click', () => addModal.classList.remove('active'));
-  btnCancelNode.addEventListener('click', () => addModal.classList.remove('active'));
+  if (btnAddNode && addModal) {
+    btnAddNode.addEventListener('click', () => addModal.classList.add('active'));
+  }
+  if (btnCloseAddModal && addModal) {
+    btnCloseAddModal.addEventListener('click', () => addModal.classList.remove('active'));
+  }
+  if (btnCancelNode && addModal) {
+    btnCancelNode.addEventListener('click', () => addModal.classList.remove('active'));
+  }
 
-  addForm.addEventListener('submit', (e) => {
+  if (addForm) {
+    addForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const name = document.getElementById('node-input-name').value.trim();
     const os = document.getElementById('node-input-os').value;
