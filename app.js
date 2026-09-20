@@ -253,17 +253,27 @@ function handleIncomingNodeTelemetry(data) {
   const nodeKey = alias ? `${hostname}_${alias}` : hostname;
   const nodeId = `node-${nodeKey.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
-  // Robust node matching: Prioritize hostname identity so different physical machines never collide
+  // Robust node matching:
+  // 1. Match by exact nodeId (hostname + alias)
   let node = state.nodes.find(n => n.id === nodeId);
+  
+  // 2. Match by exact alias if alias exists
+  if (!node && alias) {
+    node = state.nodes.find(n => n.alias && n.alias.toLowerCase() === alias.toLowerCase());
+  }
+
+  // 3. Match unaliased legacy node with the same hostname
   if (!node) {
     node = state.nodes.find(n => {
       const isSameHost = (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
                          (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
-                         (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`) ||
-                         (n.id && n.id.toLowerCase().startsWith(`node-${hostname.toLowerCase()}_`));
-      return isSameHost;
+                         (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
+      if (!isSameHost) return false;
+      return !n.alias || n.alias.toLowerCase() === hostname.toLowerCase() || (alias && n.alias.toLowerCase() === alias.toLowerCase());
     });
   }
+
+  // 4. Match offline initial placeholder
   if (!node) {
     node = state.nodes.find(n => n.id === 'node-local' && n.status === 'offline');
   }
@@ -276,18 +286,6 @@ function handleIncomingNodeTelemetry(data) {
       }
       node.id = nodeId;
     }
-    // Purge any stale ghost duplicate with the same hostname that was stuck offline
-    state.nodes = state.nodes.filter(n => {
-      if (n === node) return true;
-      if (n.id === nodeId) return false;
-      const isSameHost = (n.name && n.name.toLowerCase() === hostname.toLowerCase()) ||
-                         (n.rawHostname && n.rawHostname.toLowerCase() === hostname.toLowerCase()) ||
-                         (n.id && n.id.toLowerCase() === `node-${hostname.toLowerCase()}`);
-      if (isSameHost && n.status !== 'online') {
-        return false;
-      }
-      return true;
-    });
   } else {
     let icon = '💻';
     if (data.os && data.os.includes('Windows')) icon = '🪟';
