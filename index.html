@@ -536,6 +536,10 @@
               <h2>Active Processes Monitor (<span id="proc-node-tag">Desktop-Rig</span>)</h2>
             </div>
             <div class="table-actions">
+              <label class="filter-checkbox-label" style="display: inline-flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 600; color: var(--cyan); cursor: pointer; background: rgba(56, 189, 248, 0.08); padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.28); user-select: none; transition: all 0.2s;" title="Show only Browsers (Chrome, Edge, Firefox), Roblox, Games, and Autoclickers">
+                <input type="checkbox" id="chk-filter-games-browsers" checked style="cursor: pointer; accent-color: var(--cyan); width: 16px; height: 16px;">
+                <span>🎮 Browsers / Games / Autoclickers Only</span>
+              </label>
               <input type="text" id="proc-search" placeholder="Filter processes..." class="search-input">
               <button class="btn btn-outline-danger" id="btn-open-kill-modal" title="Stop any process by PID or Name">
                 <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -851,6 +855,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.6.2"></script>
+  <script src="app.js?v=4.6.4"></script>
 </body>
 </html>

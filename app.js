@@ -203,10 +203,31 @@ const state = {
   selectedNodeId: 'node-local',
   viewMode: 'detailed',
   searchQuery: '',
+  filterGamesBrowsersOnly: true,
   sortCol: 'name',
   sortDir: 'asc',
   expandedGroups: new Set(),
 };
+
+// Filter Keywords for Browsers, Roblox, Games, and Autoclickers
+const GAME_BROWSER_CLICKER_KEYWORDS = [
+  // Browsers
+  'chrome', 'msedge', 'edge', 'firefox', 'brave', 'opera', 'vivaldi', 'safari', 'chromium', 'arc', 'tor', 'waterfox', 'yandex', 'browser', 'webkit', 'duckduckgo',
+  // Roblox
+  'roblox', 'robloxplayer', 'robloxplayerbeta', 'robloxstudio', 'robloxcrashtracker', 'rblx',
+  // Gaming Clients & Launchers
+  'steam', 'steamwebhelper', 'steamservice', 'epicgames', 'epicgameslauncher', 'riotclient', 'riotclientservices', 'battlenet', 'eadesktop', 'origin', 'galaxyclient', 'ubisoft', 'upc', 'blizzard', 'playnite',
+  // Popular Games & Engines
+  'valorant', 'vanguard', 'vgtray', 'leagueoflegends', 'leagueclient', 'minecraft', 'javaw', 'genshin', 'starrail', 'honkai', 'unity', 'unreal', 'fortnite', 'overwatch', 'csgo', 'cs2', 'dota', 'gta', 'fivem', 'rdr2', 'retroarch', 'game', 'games', 'gaming', 'simulator', 'crossfire', 'apex', 'r5apex', 'pubg', 'tslgame', 'destiny2', 'warframe', 'eldenring', 'darksouls', 'cyberpunk', 'palworld', 'terraria', 'stardew', 'osu', 'fallguys', 'rocketleague', 'amongus', 'warzone', 'tarkov', 'worldoftanks', 'wow', 'hearthstone', 'diablo', 'smite', 'seaofthieves', 'helldivers',
+  // Autoclickers & Automation Tools
+  'autoclicker', 'opautoclicker', 'speedautoclicker', 'gsautoclicker', 'tinytask', 'macro', 'ahk', 'autohotkey', 'clicker', 'mouseclick', 'pyclicker', 'fastclicker', 'auto_clicker', 'auto-clicker', 'tgmacro', 'pulover', 'speedclicker', 'easyclicker', 'fastclick', 'mousebot', 'keybot', 'remapper', 'x-mouse', 'xmouse', 'cheatengine', 'speedhack', 'jitbit', 'keyrecorder', 'mouserecorder', 'macrorecorder', 'ghostmouse', 'automouse'
+];
+
+function isGameBrowserOrClickerProcess(name) {
+  if (!name || typeof name !== 'string') return false;
+  const lower = name.toLowerCase().replace(/\.exe$/i, '');
+  return GAME_BROWSER_CLICKER_KEYWORDS.some(kw => lower.includes(kw));
+}
 
 // Canvas references
 const canvases = {
@@ -1172,6 +1193,8 @@ function renderProcesses() {
   const node = getActiveNode();
   const tbody = document.getElementById('proc-table-body');
   const countSpan = document.getElementById('proc-display-count');
+  const chkFilter = document.getElementById('chk-filter-games-browsers');
+  const filterGamesBrowsers = chkFilter ? chkFilter.checked : (state.filterGamesBrowsersOnly !== false);
   const query = state.searchQuery.toLowerCase();
 
   // Get groups (or fallback to creating groups from flat list if older agent)
@@ -1199,8 +1222,13 @@ function renderProcesses() {
     groups = Object.values(gmap);
   }
 
-  // Filter groups by search query (match group name or any child PID)
+  // Filter groups by games/browsers/autoclickers and search query
   const filtered = groups.filter(g => {
+    if (filterGamesBrowsers) {
+      const matchGroupName = isGameBrowserOrClickerProcess(g.name);
+      const matchChild = (g.instances || []).some(inst => isGameBrowserOrClickerProcess(inst.name));
+      if (!matchGroupName && !matchChild) return false;
+    }
     if (!query) return true;
     if (g.name.toLowerCase().includes(query)) return true;
     return (g.instances || []).some(inst => 
@@ -1235,14 +1263,21 @@ function renderProcesses() {
   updateSortIndicators();
 
   const totalProcsCount = filtered.reduce((acc, g) => acc + (g.count || 1), 0);
-  countSpan.textContent = `Showing ${filtered.length} applications (${totalProcsCount} processes)`;
+  const filterSuffix = filterGamesBrowsers ? ' [🎮 Filter Active]' : '';
+  countSpan.textContent = `Showing ${filtered.length} applications (${totalProcsCount} processes)${filterSuffix}`;
   tbody.innerHTML = '';
 
   if (!filtered.length) {
+    let emptyMsg = 'No processes found matching filter.';
+    if (node.status !== 'online') {
+      emptyMsg = '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.';
+    } else if (filterGamesBrowsers && !query) {
+      emptyMsg = '🎮 No active browsers, games (Roblox, Steam, etc.), or autoclickers detected on this computer. (Uncheck the filter above to view all processes)';
+    }
     tbody.innerHTML = `
       <tr>
         <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-dim);">
-          ${node.status === 'online' ? 'No processes found matching filter.' : '⚠️ Agent is not connected. Run start-agent.bat on your computer to stream live metrics.'}
+          ${emptyMsg}
         </td>
       </tr>
     `;
@@ -1595,6 +1630,15 @@ function setupEvents() {
     state.searchQuery = e.target.value;
     renderProcesses();
   });
+
+  const chkGamesFilter = document.getElementById('chk-filter-games-browsers');
+  if (chkGamesFilter) {
+    chkGamesFilter.checked = (state.filterGamesBrowsersOnly !== false);
+    chkGamesFilter.addEventListener('change', (e) => {
+      state.filterGamesBrowsersOnly = e.target.checked;
+      renderProcesses();
+    });
+  }
 
   // Add Node Modal
   const addModal = document.getElementById('add-node-modal');
