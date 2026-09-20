@@ -1578,6 +1578,11 @@ function toggleTheme() {
 
 // UI Event Listeners
 function setupEvents() {
+  const appVerBadge = document.getElementById('app-version-badge');
+  if (appVerBadge) {
+    appVerBadge.textContent = `Fleet v${CURRENT_WEB_VERSION}`;
+  }
+
   const btnThemeToggle = document.getElementById('btn-theme-toggle');
   if (btnThemeToggle) btnThemeToggle.addEventListener('click', toggleTheme);
 
