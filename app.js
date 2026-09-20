@@ -96,6 +96,56 @@ function publishFleetCommand(topic, payload) {
   return sent;
 }
 
+// Safely send commands targeting a specific computer, preventing collision on shared hostnames
+function sendNodeCommand(node, payload) {
+  if (!node) return false;
+
+  const alias = (node.alias && typeof node.alias === 'string') ? node.alias.trim() : '';
+  const rawHostname = (node.rawHostname || node.name || '').trim();
+
+  // Check if multiple computers in the fleet share the same raw Windows hostname (e.g. "Michael")
+  const isSharedHostname = rawHostname ? (state.nodes.filter(n => {
+    const h = (n.rawHostname || n.name || '').trim().toLowerCase();
+    return h && h === rawHostname.toLowerCase();
+  }).length > 1) : false;
+
+  // Build target MQTT topics:
+  // If the machine has a distinct alias, ONLY target that unique alias to prevent accidental cross-talk
+  const targetTopics = new Set();
+  if (alias) {
+    targetTopics.add(`computermonitor/fleet/${fleetId}/${alias}/cmd`);
+    if (alias.toLowerCase() !== alias) {
+      targetTopics.add(`computermonitor/fleet/${fleetId}/${alias.toLowerCase()}/cmd`);
+    }
+  }
+
+  // Only broadcast on raw hostname if the hostname is NOT shared between multiple computers,
+  // or if the computer has no custom alias.
+  if (!isSharedHostname || !alias) {
+    if (rawHostname) {
+      targetTopics.add(`computermonitor/fleet/${fleetId}/${rawHostname}/cmd`);
+      if (rawHostname.toLowerCase() !== rawHostname) {
+        targetTopics.add(`computermonitor/fleet/${fleetId}/${rawHostname.toLowerCase()}/cmd`);
+      }
+    }
+  }
+
+  const enrichedPayload = {
+    ...payload,
+    target_alias: alias || '',
+    target_host: rawHostname || '',
+    target_id: node.id || ''
+  };
+
+  let sent = false;
+  targetTopics.forEach(topic => {
+    if (publishFleetCommand(topic, enrichedPayload)) {
+      sent = true;
+    }
+  });
+  return sent;
+}
+
 // Computer Node Aliases Mapping
 let nodeAliases = {};
 try {
@@ -137,14 +187,10 @@ async function setNodeAlias(nodeId, newAlias) {
   saveNodes();
 
   // 1. Send remote command to agent over MQTT
-  const targetHost = node.rawHostname || node.name;
-  if (targetHost) {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${targetHost}/cmd`;
-    publishFleetCommand(cmdTopic, {
-      action: 'set_alias',
-      alias: trimmed
-    });
-  }
+  sendNodeCommand(node, {
+    action: 'set_alias',
+    alias: trimmed
+  });
 
   // 2. Direct HTTP fallback if endpoint is HTTP
   if (node.endpoint && node.endpoint.startsWith('http')) {
@@ -941,28 +987,12 @@ async function requestStopProcess(identifier, isPid = true) {
   }
 
   const targetHost = node.rawHostname || node.name;
-  const dispName = getNodeDisplayName(node);
-
   // 1. Dispatch over MQTT Cloud Fleet channel
-  const targetHosts = Array.from(new Set([
-    node.rawHostname,
-    node.name,
-    node.hostname,
-    node.alias,
-    nodeAliases[node.id]
-  ].filter(h => h && typeof h === 'string' && h.trim())));
-
-  let anySent = false;
-  targetHosts.forEach(th => {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
-    if (publishFleetCommand(cmdTopic, {
-      action: 'kill',
-      identifier: identifier,
-      val: identifier,
-      isPid: isPid
-    })) {
-      anySent = true;
-    }
+  const anySent = sendNodeCommand(node, {
+    action: 'kill',
+    identifier: identifier,
+    val: identifier,
+    isPid: isPid
   });
 
   if (anySent) {
@@ -1020,34 +1050,12 @@ async function executeRestartComputer() {
   const node = state.nodes.find(n => n.id === pendingRestartNodeId) || getActiveNode();
   closeRestartModal();
 
-  const targetHost = node.rawHostname || node.name;
   const dispName = getNodeDisplayName(node);
 
-  // 1. Dispatch over MQTT Cloud Fleet channel
-  const rawHosts = [
-    node.rawHostname,
-    node.name,
-    node.hostname,
-    node.alias,
-    nodeAliases[node.id],
-    node.id ? node.id.replace(/^node-/, '') : null,
-  ].filter(h => h && typeof h === 'string' && h.trim());
-
-  const targetHosts = Array.from(new Set([
-    ...rawHosts,
-    ...rawHosts.map(h => h.toLowerCase()),
-    ...rawHosts.map(h => h.toUpperCase()),
-  ]));
-
-  let anySent = false;
-  targetHosts.forEach(th => {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
-    if (publishFleetCommand(cmdTopic, {
-      action: 'restart',
-      delay: 5
-    })) {
-      anySent = true;
-    }
+  // 1. Dispatch over MQTT Cloud Fleet channel with isolated routing
+  const anySent = sendNodeCommand(node, {
+    action: 'restart',
+    delay: 5
   });
 
   if (anySent) {
@@ -1110,33 +1118,11 @@ async function executeLockComputer() {
   const node = state.nodes.find(n => n.id === pendingLockNodeId) || getActiveNode();
   closeLockModal();
 
-  const targetHost = node.rawHostname || node.name;
   const dispName = getNodeDisplayName(node);
 
-  // 1. Dispatch over MQTT Cloud Fleet channel
-  const rawHosts = [
-    node.rawHostname,
-    node.name,
-    node.hostname,
-    node.alias,
-    nodeAliases[node.id],
-    node.id ? node.id.replace(/^node-/, '') : null,
-  ].filter(h => h && typeof h === 'string' && h.trim());
-
-  const targetHosts = Array.from(new Set([
-    ...rawHosts,
-    ...rawHosts.map(h => h.toLowerCase()),
-    ...rawHosts.map(h => h.toUpperCase()),
-  ]));
-
-  let anySent = false;
-  targetHosts.forEach(th => {
-    const cmdTopic = `computermonitor/fleet/${fleetId}/${th}/cmd`;
-    if (publishFleetCommand(cmdTopic, {
-      action: 'lock'
-    })) {
-      anySent = true;
-    }
+  // 1. Dispatch over MQTT Cloud Fleet channel with isolated routing
+  const anySent = sendNodeCommand(node, {
+    action: 'lock'
   });
 
   if (anySent) {

@@ -532,6 +532,14 @@ def handle_remote_command(msg_bytes):
     """Execute remote command received via secure fleet MQTT channel."""
     try:
         data = json.loads(msg_bytes.decode('utf-8'))
+        
+        # Verify target computer to prevent cross-talk when multiple machines share the same hostname
+        target_alias = data.get('target_alias')
+        if target_alias:
+            current_alias = LATEST_METRICS.get('alias', '')
+            if current_alias and target_alias.strip().lower() != current_alias.strip().lower():
+                return  # Command is intended for a different computer with the same hostname
+
         action = data.get('action')
         delay = int(data.get('delay', 5))
         delay = max(1, min(delay, 60))
