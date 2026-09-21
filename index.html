@@ -190,7 +190,7 @@
             <span>Restart</span>
           </button>
           <div class="lock-control-group" id="lock-control-group" title="Lock workstation (Optionally enter number of minutes to delay lock)">
-            <input type="number" id="lock-delay-minutes" class="lock-delay-input" min="0" max="720" value="0" placeholder="0" title="Enter number of minutes to delay lock (0 = immediate)">
+            <input type="number" id="lock-delay-minutes" class="lock-delay-input" min="0" max="720" placeholder="" title="Enter number of minutes to delay lock (leave empty or 0 = immediate)">
             <span class="lock-delay-label" id="lock-delay-label">min</span>
             <button class="btn-lock-pc" id="btn-lock-computer" title="Lock this computer (return to login screen)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -769,7 +769,7 @@
             ⏱️ Delay before lock:
           </label>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <input type="number" id="modal-lock-delay-minutes" min="0" max="720" value="0" style="width: 70px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); font-size: 0.95rem; font-weight: 700; text-align: center; font-family: var(--font-mono);">
+            <input type="number" id="modal-lock-delay-minutes" min="0" max="720" placeholder="" style="width: 70px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); font-size: 0.95rem; font-weight: 700; text-align: center; font-family: var(--font-mono);">
             <span style="font-size: 0.84rem; color: var(--text-dim);">minute(s) <span style="color: #818cf8; font-size: 0.78rem;">(0 = lock immediately)</span></span>
           </div>
         </div>

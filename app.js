@@ -1393,9 +1393,10 @@ function openLockModal(nodeId) {
 
   const headerInput = document.getElementById('lock-delay-minutes');
   const modalInput = document.getElementById('modal-lock-delay-minutes');
-  const initialMins = headerInput ? Math.max(0, parseInt(headerInput.value, 10) || 0) : 0;
+  const rawMins = headerInput ? headerInput.value : '';
+  const initialMins = rawMins !== '' ? Math.max(0, parseInt(rawMins, 10) || 0) : 0;
   if (modalInput) {
-    modalInput.value = initialMins;
+    modalInput.value = rawMins;
   }
   updateLockModalButtonText(initialMins);
 
@@ -2208,7 +2209,13 @@ function setupEvents() {
 
   if (lockDelayInput) {
     lockDelayInput.addEventListener('input', (e) => {
-      let v = parseInt(e.target.value, 10);
+      const raw = e.target.value;
+      if (raw === '') {
+        if (modalLockDelayInput) modalLockDelayInput.value = '';
+        updateLockModalButtonText(0);
+        return;
+      }
+      let v = parseInt(raw, 10);
       if (isNaN(v) || v < 0) v = 0;
       if (v > 720) v = 720;
       if (modalLockDelayInput) modalLockDelayInput.value = v;
@@ -2218,7 +2225,13 @@ function setupEvents() {
 
   if (modalLockDelayInput) {
     modalLockDelayInput.addEventListener('input', (e) => {
-      let v = parseInt(e.target.value, 10);
+      const raw = e.target.value;
+      if (raw === '') {
+        if (lockDelayInput) lockDelayInput.value = '';
+        updateLockModalButtonText(0);
+        return;
+      }
+      let v = parseInt(raw, 10);
       if (isNaN(v) || v < 0) v = 0;
       if (v > 720) v = 720;
       if (lockDelayInput) lockDelayInput.value = v;
