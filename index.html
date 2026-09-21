@@ -86,8 +86,8 @@
         </button>
 
         <div class="view-mode-toggle">
-          <button class="toggle-btn active" id="btn-view-detailed">Detailed View</button>
-          <button class="toggle-btn" id="btn-view-fleet">Fleet Grid</button>
+          <button class="toggle-btn" id="btn-view-detailed">Detailed View</button>
+          <button class="toggle-btn active" id="btn-view-fleet">Fleet Grid</button>
         </div>
 
         <a href="ComputerMonitor.7z" download="ComputerMonitor.7z" class="toggle-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: var(--emerald); font-weight: 600; padding: 6px 12px; border-radius: 8px;" title="Download complete standalone package with all tools in 7-Zip format (14 MB, No Python needed)">
@@ -122,14 +122,14 @@
     </section>
 
     <!-- Fleet Comparison Grid (Visible when Fleet Grid view is active) -->
-    <section class="fleet-comparison-view" id="fleet-comparison-view" style="display: none;">
+    <section class="fleet-comparison-view" id="fleet-comparison-view">
       <div class="comparison-grid" id="comparison-grid">
         <!-- Rendered dynamically by app.js -->
       </div>
     </section>
 
     <!-- Detailed Single-Computer Telemetry Grid -->
-    <div id="detailed-telemetry-container">
+    <div id="detailed-telemetry-container" style="display: none;">
       <!-- Security / Offline Alert Banner (shown when agent is stopped or task is missing) -->
       <div class="agent-alert-banner" id="agent-alert-banner" style="display: none;">
         <div class="alert-icon">🚨</div>

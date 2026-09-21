@@ -361,7 +361,7 @@ function loadSavedNodes() {
 const state = {
   nodes: loadSavedNodes(),
   selectedNodeId: 'node-local',
-  viewMode: 'detailed',
+  viewMode: 'fleet',
   searchQuery: '',
   filterGamesBrowsersOnly: true,
   sortCol: 'name',
@@ -2498,6 +2498,7 @@ function startAppServices() {
   renderFleetBar();
   updateActiveNodeBanner();
   updateDetailedView();
+  switchViewMode(state.viewMode);
   initMqttFleet();
   pollRealFleet();
   if (!fleetPollInterval) {
