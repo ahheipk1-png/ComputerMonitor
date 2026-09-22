@@ -401,19 +401,35 @@ body {
   border-radius: 4px;
 }
 
-.node-status-pill.online {
-  background: rgba(5, 150, 105, 0.12);
+.node-status-pill.online,
+.node-status-pill.online-active {
+  background: rgba(5, 150, 105, 0.14);
   color: var(--emerald);
+  border: 1px solid rgba(5, 150, 105, 0.28);
+}
+
+.node-status-pill.online-locked {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
+[data-theme="dark"] .node-status-pill.online-locked {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.55);
 }
 
 .node-status-pill.offline {
   background: rgba(225, 29, 72, 0.12);
   color: var(--rose);
+  border: 1px solid rgba(225, 29, 72, 0.25);
 }
 
 .node-status-pill.syncing {
   background: rgba(56, 189, 248, 0.15);
   color: var(--cyan);
+  border: 1px solid rgba(56, 189, 248, 0.25);
   animation: pulseSync 1.5s infinite ease-in-out;
 }
 

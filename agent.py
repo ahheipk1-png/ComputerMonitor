@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.6"
+AGENT_VERSION = "4.7.7"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
@@ -98,6 +98,7 @@ LATEST_METRICS = {
     'hostname': platform.node(),
     'os': f"{platform.system()} {platform.release()}",
     'arch': platform.machine(),
+    'is_locked': False,
     'cpu': 0,
     'cpu_freq': '-- GHz',
     'cpu_count': os.cpu_count() or 4,
@@ -234,7 +235,77 @@ def get_computer_alias():
                         return val
             except Exception:
                 pass
-    return platform.node()
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class WTSINFOEX_LEVEL1_W(ctypes.Structure):
+            _fields_ = [
+                ('SessionId', wintypes.ULONG),
+                ('SessionState', wintypes.DWORD),
+                ('SessionFlags', wintypes.DWORD),
+                ('WinStationName', wintypes.WCHAR * 33),
+                ('UserName', wintypes.WCHAR * 21),
+                ('DomainName', wintypes.WCHAR * 18),
+                ('LogonTime', wintypes.LARGE_INTEGER),
+                ('ConnectTime', wintypes.LARGE_INTEGER),
+                ('DisconnectTime', wintypes.LARGE_INTEGER),
+                ('LastInputTime', wintypes.LARGE_INTEGER),
+                ('CurrentTime', wintypes.LARGE_INTEGER),
+                ('IncomingBytes', wintypes.DWORD),
+                ('OutgoingBytes', wintypes.DWORD),
+                ('IncomingFrames', wintypes.DWORD),
+                ('OutgoingFrames', wintypes.DWORD),
+                ('IncomingCompressionRatio', wintypes.DWORD),
+                ('OutgoingCompressionRatio', wintypes.DWORD),
+            ]
+
+        class WTSINFOEXW(ctypes.Structure):
+            _fields_ = [
+                ('Level', wintypes.DWORD),
+                ('Data', WTSINFOEX_LEVEL1_W)
+            ]
+    except Exception:
+        pass
+
+
+def is_workstation_locked():
+    """Real-time detection of Windows lock screen / login screen state."""
+    if sys.platform != 'win32':
+        return False
+
+    # Check 1: LogonUI.exe running (Windows lock screen user interface)
+    try:
+        if HAS_PSUTIL:
+            for p in psutil.process_iter(['name']):
+                pname = p.info.get('name')
+                if pname and pname.lower() == 'logonui.exe':
+                    return True
+    except Exception:
+        pass
+
+    # Check 2: Terminal Services API SessionFlags
+    try:
+        kernel32 = ctypes.windll.kernel32
+        wtsapi32 = ctypes.windll.wtsapi32
+        session_id = kernel32.WTSGetActiveConsoleSessionId()
+        if session_id != 0xFFFFFFFF:
+            ppBuffer = ctypes.c_void_p()
+            pBytesReturned = wintypes.DWORD()
+            # 25 = WTSSessionInfoEx
+            if wtsapi32.WTSQuerySessionInformationW(0, session_id, 25, ctypes.byref(ppBuffer), ctypes.byref(pBytesReturned)):
+                try:
+                    info = ctypes.cast(ppBuffer, ctypes.POINTER(WTSINFOEXW)).contents
+                    if info.Level == 1:
+                        # 0 = WTS_SESSIONSTATE_LOCK, 1 = WTS_SESSIONSTATE_UNLOCK
+                        return info.Data.SessionFlags == 0
+                finally:
+                    wtsapi32.WTSFreeMemory(ppBuffer)
+    except Exception:
+        pass
+
+    return False
 
 
 def background_metrics_collector():
@@ -261,6 +332,7 @@ def background_metrics_collector():
                 'os': f"{platform.system()} {platform.release()}",
                 'arch': platform.machine(),
                 'task_scheduler': cached_sched,
+                'is_locked': is_workstation_locked(),
             }
 
             if HAS_PSUTIL:

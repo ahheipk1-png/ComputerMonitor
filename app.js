@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.6';
-const EXPECTED_AGENT_VERSION = '4.7.6';
+const CURRENT_WEB_VERSION = '4.7.7';
+const EXPECTED_AGENT_VERSION = '4.7.7';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -382,6 +382,66 @@ function formatSecondsToMMSS(totalSeconds) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+// Helper to get formatted status info (Online (Active), Online (Locked), Offline)
+function getNodeStatusInfo(node) {
+  if (!node) {
+    return {
+      label: 'Offline',
+      pillText: 'OFFLINE',
+      pillClass: 'offline',
+      miniText: 'OFFLINE',
+      miniClass: 'text-rose',
+      metaText: 'OFFLINE',
+      metaClass: 'meta-val text-rose'
+    };
+  }
+
+  if (node.status === 'syncing') {
+    return {
+      label: 'Syncing...',
+      pillText: 'SYNCING',
+      pillClass: 'syncing',
+      miniText: 'SYNCING...',
+      miniClass: 'text-cyan',
+      metaText: 'CONNECTING...',
+      metaClass: 'meta-val text-cyan'
+    };
+  }
+
+  if (node.status === 'online') {
+    if (node.isLocked) {
+      return {
+        label: 'Online (Locked)',
+        pillText: 'ONLINE (LOCKED)',
+        pillClass: 'online-locked',
+        miniText: 'LOCKED 🔒',
+        miniClass: 'text-amber',
+        metaText: 'ONLINE (LOCKED 🔒)',
+        metaClass: 'meta-val text-amber'
+      };
+    }
+    return {
+      label: 'Online (Active)',
+      pillText: 'ONLINE (ACTIVE)',
+      pillClass: 'online-active',
+      miniText: 'ACTIVE 🟢',
+      miniClass: 'text-emerald',
+      metaText: 'ONLINE (ACTIVE 🟢)',
+      metaClass: 'meta-val text-emerald'
+    };
+  }
+
+  return {
+    label: 'Offline',
+    pillText: 'OFFLINE',
+    pillClass: 'offline',
+    miniText: 'OFFLINE',
+    miniClass: 'text-rose',
+    metaText: 'OFFLINE',
+    metaClass: 'meta-val text-rose'
+  };
+}
+
 // Retrieve active scheduled lock for a given node (if not expired)
 function getNodeScheduledLock(node) {
   if (!node) return null;
@@ -696,6 +756,7 @@ function handleIncomingNodeTelemetry(data) {
   }
   if (data.ip) node.ip = data.ip;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
+  if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
   if (data.os) {
     node.os = data.os;
     if (data.os.includes('Windows')) node.osIcon = '🪟';
@@ -850,6 +911,7 @@ function renderFleetBar() {
     const lockBadgeHtml = lockInfo
       ? `<span class="node-lock-countdown-pill fleet-lock-badge-${node.id}" title="Lock in ${formatSecondsToMMSS(Math.max(0, Math.ceil((lockInfo.deadline - Date.now()) / 1000)))}">⏱️ ${formatSecondsToMMSS(Math.max(0, Math.ceil((lockInfo.deadline - Date.now()) / 1000)))}</span>`
       : `<span class="node-lock-countdown-pill fleet-lock-badge-${node.id}" style="display:none;"></span>`;
+    const statusInfo = getNodeStatusInfo(node);
 
     card.innerHTML = `
       <div class="node-card-top">
@@ -869,7 +931,7 @@ function renderFleetBar() {
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
           ${lockBadgeHtml}
-          <span class="node-status-pill ${node.status}">${node.status === 'syncing' ? 'SYNCING' : node.status.toUpperCase()}</span>
+          <span class="node-status-pill ${statusInfo.pillClass}">${statusInfo.pillText}</span>
           ${node.status === 'offline' ? `<button class="btn-remove-node" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 4px; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; cursor: pointer; line-height: 1;">✕</button>` : ''}
         </div>
       </div>
@@ -884,7 +946,7 @@ function renderFleetBar() {
         </div>
         <div class="node-mini-stat">
           <span class="node-mini-lbl">STATUS</span>
-          <span class="node-mini-val ${node.status === 'online' ? 'text-emerald' : (node.status === 'syncing' ? 'text-cyan' : 'text-rose')}">${node.status === 'online' ? 'LIVE' : (node.status === 'syncing' ? 'SYNCING...' : 'OFFLINE')}</span>
+          <span class="node-mini-val ${statusInfo.miniClass}">${statusInfo.miniText}</span>
         </div>
       </div>
     `;
@@ -917,6 +979,7 @@ function renderFleetComparisonGrid() {
     const dispName = getNodeDisplayName(node);
     const hasAlias = dispName !== node.name && node.name !== 'This Computer (Local)';
     const lockInfo = getNodeScheduledLock(node);
+    const statusInfo = getNodeStatusInfo(node);
 
     card.innerHTML = `
       <div class="comp-header">
@@ -931,7 +994,7 @@ function renderFleetComparisonGrid() {
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
               : `<button class="btn-comp-outdated" data-id="${node.id}" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
           ) : (node.status === 'syncing' ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25);">Syncing...</span>` : '')}
-          <span class="node-status-pill ${node.status}">${node.status.toUpperCase()}</span>
+          <span class="node-status-pill ${statusInfo.pillClass}">${statusInfo.pillText}</span>
           ${node.status === 'offline' ? `<button class="btn-comp-remove" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; font-weight: bold; cursor: pointer;">✕</button>` : ''}
         </div>
       </div>
@@ -1057,19 +1120,11 @@ function updateActiveNodeBanner() {
   const agentVerTxt = node.agentVersion ? ` • Agent: v${node.agentVersion}` : '';
   document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel}${agentVerTxt} • Endpoint: ${node.endpoint}`;
   
-  const isOnline = node.status === 'online';
-  const isSyncing = node.status === 'syncing';
-
+  const statusInfo = getNodeStatusInfo(node);
   const metaStatusEl = document.getElementById('meta-status');
-  if (isOnline) {
-    metaStatusEl.textContent = 'ONLINE (LIVE)';
-    metaStatusEl.className = 'meta-val text-emerald';
-  } else if (isSyncing) {
-    metaStatusEl.textContent = 'CONNECTING...';
-    metaStatusEl.className = 'meta-val text-cyan';
-  } else {
-    metaStatusEl.textContent = 'OFFLINE';
-    metaStatusEl.className = 'meta-val text-rose';
+  if (metaStatusEl) {
+    metaStatusEl.textContent = statusInfo.metaText;
+    metaStatusEl.className = statusInfo.metaClass;
   }
 
   document.getElementById('meta-uptime').textContent = isOnline ? formatUptime(node.uptime) : '--:--:--';
@@ -1845,6 +1900,7 @@ async function pollRealFleet() {
       node.lastSeen = new Date();
       node.ping = pingMs;
       if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
+      if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
 
       if (data.hostname) node.name = data.hostname;
       if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
@@ -1904,7 +1960,7 @@ async function pollRealFleet() {
 
   if (active.status === 'online') {
     statusEl.className = 'connection-status online';
-    statusTxt.textContent = `${getNodeDisplayName(active)} (Live)`;
+    statusTxt.textContent = `${getNodeDisplayName(active)} ${active.isLocked ? '(Locked 🔒)' : '(Active 🟢)'}`;
   } else {
     statusEl.className = 'connection-status';
     statusTxt.textContent = `${getNodeDisplayName(active)} (Offline)`;

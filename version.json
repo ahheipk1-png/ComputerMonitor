@@ -1,7 +1,7 @@
 {
-  "version": "4.7.6",
-  "build_timestamp": 1789965000,
+  "version": "4.7.7",
+  "build_timestamp": 1790100000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Fix lock countdown timer text contrast by resolving CSS specificity inheritance and applying luminous high-visibility styling",
+  "release_notes": "Real-time Workstation Lock status detection: Online (Active), Online (Locked), Offline across fleet cards and telemetry",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }
