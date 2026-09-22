@@ -409,7 +409,7 @@ function getNodeStatusInfo(node) {
   }
 
   if (node.status === 'online') {
-    if (node.isLocked) {
+    if (node.isLocked === true) {
       return {
         label: 'Online (Locked)',
         pillText: 'ONLINE (LOCKED)',
@@ -420,13 +420,24 @@ function getNodeStatusInfo(node) {
         metaClass: 'meta-val text-amber'
       };
     }
+    if (node.isLocked === false) {
+      return {
+        label: 'Online (Active)',
+        pillText: 'ONLINE (ACTIVE)',
+        pillClass: 'online-active',
+        miniText: 'ACTIVE 🟢',
+        miniClass: 'text-emerald',
+        metaText: 'ONLINE (ACTIVE 🟢)',
+        metaClass: 'meta-val text-emerald'
+      };
+    }
     return {
-      label: 'Online (Active)',
-      pillText: 'ONLINE (ACTIVE)',
-      pillClass: 'online-active',
-      miniText: 'ACTIVE 🟢',
+      label: 'Online',
+      pillText: 'ONLINE',
+      pillClass: 'online',
+      miniText: 'ONLINE 🟢',
       miniClass: 'text-emerald',
-      metaText: 'ONLINE (ACTIVE 🟢)',
+      metaText: 'ONLINE',
       metaClass: 'meta-val text-emerald'
     };
   }
@@ -1962,7 +1973,8 @@ async function pollRealFleet() {
 
   if (active.status === 'online') {
     statusEl.className = 'connection-status online';
-    statusTxt.textContent = `${getNodeDisplayName(active)} ${active.isLocked ? '(Locked 🔒)' : '(Active 🟢)'}`;
+    const lockTxt = active.isLocked === true ? '(Locked 🔒)' : (active.isLocked === false ? '(Active 🟢)' : '(Online)');
+    statusTxt.textContent = `${getNodeDisplayName(active)} ${lockTxt}`;
   } else {
     statusEl.className = 'connection-status';
     statusTxt.textContent = `${getNodeDisplayName(active)} (Offline)`;
