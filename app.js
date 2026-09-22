@@ -1120,6 +1120,8 @@ function updateActiveNodeBanner() {
   const agentVerTxt = node.agentVersion ? ` • Agent: v${node.agentVersion}` : '';
   document.getElementById('active-node-desc').textContent = `${hasAlias ? 'Host: ' + node.name + ' • ' : ''}${node.os} • ${node.cpuModel}${agentVerTxt} • Endpoint: ${node.endpoint}`;
   
+  const isOnline = node ? node.status === 'online' : false;
+  const isSyncing = node ? node.status === 'syncing' : false;
   const statusInfo = getNodeStatusInfo(node);
   const metaStatusEl = document.getElementById('meta-status');
   if (metaStatusEl) {
