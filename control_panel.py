@@ -772,19 +772,27 @@ reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "v
 
         bat_path = os.path.join(BASE_DIR, "install-extension-all-users.bat")
 
+        def prompt_open_extensions():
+            self.log("[SUCCESS] Tab Tracker extension registered!")
+            if messagebox.askyesno(
+                "Tab Tracker Installed",
+                "✅ Tab Tracker Extension Successfully Registered!\n\n"
+                "Chrome/Edge security requires you to enable third-party extensions in the browser:\n\n"
+                "1. Find 'ComputerMonitor Tab Tracker'\n"
+                "2. Flip the toggle switch to ON (blue)\n\n"
+                "Would you like to open chrome://extensions now?"
+            ):
+                try:
+                    subprocess.Popen(['cmd.exe', '/c', 'start', 'chrome.exe', 'chrome://extensions'], creationflags=0x08000000)
+                except Exception:
+                    pass
+
         if is_admin():
             if os.path.exists(bat_path):
                 run_cmd_hidden(["cmd.exe", "/c", bat_path])
             else:
                 run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-            self.log("[SUCCESS] Tab Tracker installed for ALL Chrome & Edge users!")
-            messagebox.showinfo(
-                "Tab Tracker Installed",
-                "✅ Tab Tracker Extension Installed Successfully!\n\n"
-                "⚠️ IMPORTANT NEXT STEP:\n"
-                "Please RESTART Chrome and Microsoft Edge (close all windows and reopen) so the browser loads the new system policy.\n\n"
-                "Once reopened, open tab monitoring will begin immediately."
-            )
+            prompt_open_extensions()
         else:
             self.log("Requesting Administrator permission via UAC to register policies for all accounts...")
             temp_ps1 = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'cm_install_ext_policy.ps1')
@@ -797,14 +805,7 @@ reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "v
                     os.remove(temp_ps1)
                 except Exception:
                     pass
-                self.log("[SUCCESS] Tab Tracker extension registered!")
-                messagebox.showinfo(
-                    "Tab Tracker Installed",
-                    "✅ Tab Tracker Extension Installed Successfully!\n\n"
-                    "⚠️ IMPORTANT NEXT STEP:\n"
-                    "Please RESTART Chrome and Microsoft Edge (close all windows and reopen) so the browser loads the new system policy.\n\n"
-                    "Once reopened, open tab monitoring will begin immediately."
-                )
+                prompt_open_extensions()
             except Exception as e:
                 self.log(f"Elevation error: {e}")
                 messagebox.showerror("Installation Error", str(e))
