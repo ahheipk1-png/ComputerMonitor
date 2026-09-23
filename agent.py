@@ -571,6 +571,27 @@ def background_metrics_collector():
                         m['browser_tabs'] = []
                         m['browser_name'] = ''
 
+            # Browser Monitoring Failure / Health Check
+            chrome_running = any(p.get('name', '').lower() == 'chrome.exe' for p in m.get('processes', []))
+            edge_running = any(p.get('name', '').lower() in ('msedge.exe', 'edge.exe') for p in m.get('processes', []))
+            ext_connected = bool(LATEST_BROWSER_TABS and (time.time() - BROWSER_TABS_UPDATED_AT < 45))
+
+            warning_msg = None
+            if (chrome_running or edge_running) and not ext_connected:
+                b_names = []
+                if chrome_running:
+                    b_names.append('Google Chrome')
+                if edge_running:
+                    b_names.append('Microsoft Edge')
+                warning_msg = f"{' & '.join(b_names)} running, but Web Monitoring is disconnected."
+
+            m['browser_monitoring'] = {
+                'chrome_running': chrome_running,
+                'edge_running': edge_running,
+                'extension_connected': ext_connected,
+                'warning': warning_msg
+            }
+
             with METRICS_LOCK:
                 LATEST_METRICS = m
 

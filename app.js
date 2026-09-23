@@ -770,6 +770,7 @@ function handleIncomingNodeTelemetry(data) {
   if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
   if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
   if (data.browser_name !== undefined) node.browserName = data.browser_name;
+  if (data.browser_monitoring !== undefined) node.browserMonitoring = data.browser_monitoring;
   if (data.os) {
     node.os = data.os;
     if (data.os.includes('Windows')) node.osIcon = '🪟';
@@ -1007,6 +1008,17 @@ function renderFleetComparisonGrid() {
               ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">v${node.agentVersion} 🟢</span>`
               : `<button class="btn-comp-outdated" data-id="${node.id}" title="Outdated Agent! Click for 1-click update instructions.">⚠️ v${escapeHtml(node.agentVersion || 'Older')} (Update)</button>`
           ) : (node.status === 'syncing' ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.12); color: var(--cyan); font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.25);">Syncing...</span>` : '')}
+          ${(() => {
+            const nProcs = node.processes || [];
+            const nChrome = nProcs.some(p => p.name.toLowerCase() === 'chrome.exe') || (node.browserMonitoring && node.browserMonitoring.chrome_running);
+            const nEdge = nProcs.some(p => p.name.toLowerCase() === 'msedge.exe' || p.name.toLowerCase() === 'edge.exe') || (node.browserMonitoring && node.browserMonitoring.edge_running);
+            const nLiveTabs = (node.browserTabs || []).some(t => !t.is_history) || (node.browserMonitoring && node.browserMonitoring.extension_connected);
+            if (node.status === 'online' && (nChrome || nEdge) && !nLiveTabs) {
+              const bName = (nChrome && nEdge) ? 'Browsers' : (nChrome ? 'Chrome' : 'Edge');
+              return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(244, 63, 94, 0.15); color: #fb7185; font-weight: 600; border: 1px solid rgba(244, 63, 94, 0.35);" title="${bName} is running without Tab Tracker extension">⚠️ ${bName} Unmonitored</span>`;
+            }
+            return '';
+          })()}
           <span class="node-status-pill ${statusInfo.pillClass}">${statusInfo.pillText}</span>
           ${node.status === 'offline' ? `<button class="btn-comp-remove" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; font-weight: bold; cursor: pointer;">✕</button>` : ''}
         </div>
@@ -1783,16 +1795,69 @@ function renderBrowserTabs(node) {
   const countEl = document.getElementById('browser-tabs-count');
   const nodeTag = document.getElementById('browser-node-tag');
   const badgeEl = document.getElementById('browser-name-badge');
+  const alertContainer = document.getElementById('browser-monitoring-alert');
 
   if (nodeTag) nodeTag.textContent = getNodeDisplayName(node);
 
   const tabs = (node && Array.isArray(node.browserTabs)) ? node.browserTabs : [];
   const bname = (node && node.browserName) || '';
 
+  // Check running browsers and extension connection health
+  const procs = (node && node.processes) ? node.processes : [];
+  const isChromeRunning = procs.some(p => (p.name || '').toLowerCase() === 'chrome.exe') || 
+                          Boolean(node && node.browserMonitoring && node.browserMonitoring.chrome_running);
+  const isEdgeRunning = procs.some(p => {
+    const n = (p.name || '').toLowerCase();
+    return n === 'msedge.exe' || n === 'edge.exe';
+  }) || Boolean(node && node.browserMonitoring && node.browserMonitoring.edge_running);
+
+  const hasLiveExtension = tabs.some(t => !t.is_history) || 
+                          Boolean(node && node.browserMonitoring && node.browserMonitoring.extension_connected);
+
+  const isBrowserRunning = isChromeRunning || isEdgeRunning;
+  const isMonitoringFailed = node && node.status === 'online' && isBrowserRunning && !hasLiveExtension;
+
+  const runningNames = [];
+  if (isChromeRunning) runningNames.push('Google Chrome');
+  if (isEdgeRunning) runningNames.push('Microsoft Edge');
+  const failedBrowserText = runningNames.join(' & ');
+
+  if (alertContainer) {
+    if (isMonitoringFailed) {
+      alertContainer.innerHTML = `
+        <div style="background: rgba(225, 29, 72, 0.1); border: 1px solid rgba(225, 29, 72, 0.35); border-radius: 8px; padding: 12px 16px; margin: 12px 16px 16px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: flex-start; gap: 10px; max-width: 680px;">
+            <span style="font-size: 1.4rem; line-height: 1;">⚠️</span>
+            <div>
+              <div style="font-weight: 700; color: #f43f5e; font-size: 0.9rem;">
+                Web Monitoring Warning: ${failedBrowserText} is running, but Tab Tracker is NOT Connected!
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-main); margin-top: 3px; line-height: 1.45;">
+                The browser is actively executing on this computer, but the Tab Tracker extension is not transmitting tab information. Open tab tracking and remote tab closing are disabled.
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="border-color: #f43f5e; color: #f43f5e; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer;">
+            🧩 Fix: Install for All Users
+          </button>
+        </div>
+      `;
+    } else {
+      alertContainer.innerHTML = '';
+    }
+  }
+
   if (badgeEl) {
-    if (bname) {
+    if (isMonitoringFailed) {
+      badgeEl.textContent = `⚠️ ${failedBrowserText} Unmonitored`;
+      badgeEl.style.display = 'inline-block';
+      badgeEl.style.background = 'rgba(244, 63, 94, 0.18)';
+      badgeEl.style.color = '#fb7185';
+      badgeEl.style.border = '1px solid rgba(244, 63, 94, 0.35)';
+    } else if (bname) {
       badgeEl.textContent = bname;
       badgeEl.style.display = 'inline-block';
+      badgeEl.style.border = 'none';
       if (bname === 'Edge') {
         badgeEl.style.background = 'rgba(6, 182, 212, 0.15)';
         badgeEl.style.color = '#06b6d4';
@@ -1810,9 +1875,9 @@ function renderBrowserTabs(node) {
 
   if (countEl) {
     if (tabs.length === 0) {
-      countEl.textContent = '0 tabs open';
+      countEl.textContent = isMonitoringFailed ? `⚠️ ${failedBrowserText} running (unmonitored)` : '0 tabs open';
     } else if (bname.includes('History')) {
-      countEl.textContent = `${tabs.length} recent visited sites`;
+      countEl.textContent = `${tabs.length} recent visited sites (History Fallback)`;
     } else {
       countEl.textContent = `${tabs.length} tab${tabs.length === 1 ? '' : 's'} open`;
     }
@@ -1832,19 +1897,37 @@ function renderBrowserTabs(node) {
   }
 
   if (tabs.length === 0) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align: center; padding: 32px 20px;">
-          <div style="font-size: 1.05rem; margin-bottom: 6px; color: var(--text-main); font-weight: 500;">No Open Browser Tabs Detected</div>
-          <div style="font-size: 0.82rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 14px auto; line-height: 1.5;">
-            Chrome or Edge is not currently active, or the Tab Tracker extension hasn't been set up yet.
-          </div>
-          <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.8rem; padding: 5px 14px;">
-            🧩 Extension Setup Guide (All Users)
-          </button>
-        </td>
-      </tr>
-    `;
+    if (isMonitoringFailed) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 36px 20px;">
+            <div style="font-size: 1.15rem; margin-bottom: 8px; color: #f43f5e; font-weight: 600;">
+              ⚠️ Web Monitoring Failed (${failedBrowserText} Running Unmonitored)
+            </div>
+            <div style="font-size: 0.84rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 16px auto; line-height: 1.5;">
+              ${failedBrowserText} processes are actively executing on this machine, but the Tab Tracker extension is missing, disabled, or blocked. Run the 1-click installer to force-install it across all users.
+            </div>
+            <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.82rem; padding: 6px 16px; border-color: #f43f5e; color: #f43f5e; font-weight: 600;">
+              🧩 1-Click Install for All Users
+            </button>
+          </td>
+        </tr>
+      `;
+    } else {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 32px 20px;">
+            <div style="font-size: 1.05rem; margin-bottom: 6px; color: var(--text-main); font-weight: 500;">No Open Browser Tabs Detected</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 14px auto; line-height: 1.5;">
+              Chrome or Edge is not currently open on this machine.
+            </div>
+            <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.8rem; padding: 5px 14px;">
+              🧩 Extension Setup Guide (All Users)
+            </button>
+          </td>
+        </tr>
+      `;
+    }
     return;
   }
 
@@ -2073,6 +2156,7 @@ async function pollRealFleet() {
       if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
       if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
       if (data.browser_name !== undefined) node.browserName = data.browser_name;
+      if (data.browser_monitoring !== undefined) node.browserMonitoring = data.browser_monitoring;
 
       if (data.hostname) node.name = data.hostname;
       if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
