@@ -35,8 +35,11 @@ net session >nul 2>&1
 if %errorLevel% equ 0 (
     echo [*] Administrator privileges detected. Registering System-Wide Policies for ALL users...
 
-    :: Chrome All-Users Policy
+    :: Chrome All-Users Policy (Chromium strictly requires sequential integer values starting at 1)
+    reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallForcelist" /v 1 /t REG_SZ /d "ijfbfnckpabilcbgenhjddgchockeobe;http://127.0.0.1:5500/extension/updates.xml" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "ijfbfnckpabilcbgenhjddgchockeobe;http://127.0.0.1:5500/extension/updates.xml" /f >nul 2>&1
+    reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallSources" /v 1 /t REG_SZ /d "http://127.0.0.1:5500/*" /f >nul 2>&1
+    reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallSources" /v 2 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Google\Chrome\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f >nul 2>&1
 
@@ -46,7 +49,10 @@ if %errorLevel% equ 0 (
     reg add "HKLM\Software\WOW6432Node\Google\Chrome\Extensions\ijfbfnckpabilcbgenhjddgchockeobe" /v "version" /t REG_SZ /d "1.0.0" /f >nul 2>&1
 
     :: Edge All-Users Policy
+    reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 1 /t REG_SZ /d "ijfbfnckpabilcbgenhjddgchockeobe;http://127.0.0.1:5500/extension/updates.xml" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "ijfbfnckpabilcbgenhjddgchockeobe;http://127.0.0.1:5500/extension/updates.xml" /f >nul 2>&1
+    reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallSources" /v 1 /t REG_SZ /d "http://127.0.0.1:5500/*" /f >nul 2>&1
+    reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallSources" /v 2 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f >nul 2>&1
     reg add "HKLM\Software\Policies\Microsoft\Edge\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f >nul 2>&1
 

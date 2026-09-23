@@ -746,8 +746,11 @@ reg add "HKCU\\Software\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG
 reg add "HKCU\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
 reg add "HKCU\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
 
-# HKLM Policies (All Users)
+## HKLM Policies (All Users) - Sequential index starting at 1 is strictly required by Chromium
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" /v 1 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 1 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 2 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
 reg add "HKLM\\Software\\Google\\Chrome\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
@@ -755,7 +758,10 @@ reg add "HKLM\\Software\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG
 reg add "HKLM\\Software\\WOW6432Node\\Google\\Chrome\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
 reg add "HKLM\\Software\\WOW6432Node\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
 
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" /v 1 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 1 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 2 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
 reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
 reg add "HKLM\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
@@ -775,9 +781,9 @@ reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "v
             messagebox.showinfo(
                 "Tab Tracker Installed",
                 "✅ Tab Tracker Extension Installed Successfully!\n\n"
-                "• All Users & Profiles: Registered via Windows Machine Policies\n"
-                "• Browsers: Google Chrome & Microsoft Edge\n\n"
-                "Open or restart Chrome/Edge to activate tab tracking."
+                "⚠️ IMPORTANT NEXT STEP:\n"
+                "Please RESTART Chrome and Microsoft Edge (close all windows and reopen) so the browser loads the new system policy.\n\n"
+                "Once reopened, open tab monitoring will begin immediately."
             )
         else:
             self.log("Requesting Administrator permission via UAC to register policies for all accounts...")
@@ -795,9 +801,9 @@ reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "v
                 messagebox.showinfo(
                     "Tab Tracker Installed",
                     "✅ Tab Tracker Extension Installed Successfully!\n\n"
-                    "• All Users & Profiles: Registered via Windows Machine Policies\n"
-                    "• Browsers: Google Chrome & Microsoft Edge\n\n"
-                    "Open or restart Chrome/Edge to activate tab tracking."
+                    "⚠️ IMPORTANT NEXT STEP:\n"
+                    "Please RESTART Chrome and Microsoft Edge (close all windows and reopen) so the browser loads the new system policy.\n\n"
+                    "Once reopened, open tab monitoring will begin immediately."
                 )
             except Exception as e:
                 self.log(f"Elevation error: {e}")

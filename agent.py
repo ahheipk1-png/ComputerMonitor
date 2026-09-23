@@ -914,8 +914,11 @@ def install_extension_system_wide():
         reg_add("HKCU", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "path", target_crx)
         reg_add("HKCU", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "version", "1.0.0")
 
-        # 2. System-Wide Policies (All Users)
+        # 2. System-Wide Policies (All Users) - Sequential index starting at 1 is required by Chromium
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallForcelist", "1", f"{ext_id};{update_url}")
         reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallForcelist", "101", f"{ext_id};{update_url}")
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "1", "http://127.0.0.1:5500/*")
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "2", "https://computermonitor.pages.dev/*")
         reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "101", "http://127.0.0.1:5500/*")
         reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "102", "https://computermonitor.pages.dev/*")
 
@@ -924,7 +927,10 @@ def install_extension_system_wide():
         reg_add("HKLM", f"Software\\WOW6432Node\\Google\\Chrome\\Extensions\\{ext_id}", "path", target_crx)
         reg_add("HKLM", f"Software\\WOW6432Node\\Google\\Chrome\\Extensions\\{ext_id}", "version", "1.0.0")
 
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallForcelist", "1", f"{ext_id};{update_url}")
         reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallForcelist", "101", f"{ext_id};{update_url}")
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "1", "http://127.0.0.1:5500/*")
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "2", "https://computermonitor.pages.dev/*")
         reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "101", "http://127.0.0.1:5500/*")
         reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "102", "https://computermonitor.pages.dev/*")
 
@@ -1527,10 +1533,21 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b'{"error": "Not Found"}')
             return
 
-        file_path = os.path.join(BASE_DIR, fname)
-        if not os.path.exists(file_path):
-            file_path = os.path.join(PROGRAM_DATA_DIR, fname)
-        if os.path.exists(file_path):
+        candidate_paths = [
+            os.path.join(PROGRAM_DATA_DIR, 'extension', os.path.basename(fname)),
+            os.path.join(BASE_DIR, 'extension', os.path.basename(fname)),
+            os.path.join(PROGRAM_DATA_DIR, fname),
+            os.path.join(BASE_DIR, fname),
+            os.path.join(PROGRAM_DATA_DIR, os.path.basename(fname)),
+            os.path.join(BASE_DIR, os.path.basename(fname)),
+        ]
+        file_path = None
+        for cp in candidate_paths:
+            if os.path.isfile(cp):
+                file_path = cp
+                break
+
+        if file_path and os.path.exists(file_path):
             try:
                 with open(file_path, 'rb') as f:
                     content = f.read()
