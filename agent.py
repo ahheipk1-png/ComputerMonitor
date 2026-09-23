@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.8"
+AGENT_VERSION = "4.7.9"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
@@ -858,6 +858,86 @@ def trigger_agent_update():
         pass
 
 
+def install_extension_system_wide():
+    """Install and register Tab Tracker extension for Chrome and Edge across Current User & All Users."""
+    if platform.system() != 'Windows':
+        return False, "Only supported on Windows"
+    try:
+        pdata = os.environ.get('ProgramData', r'C:\ProgramData')
+        target_dir = os.path.join(pdata, 'ComputerMonitor', 'extension')
+        os.makedirs(target_dir, exist_ok=True)
+
+        base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+        src_ext_dir = os.path.join(base_dir, 'extension')
+        src_crx = os.path.join(base_dir, 'extension.crx')
+        target_crx = os.path.join(target_dir, 'extension.crx')
+
+        import shutil
+        if os.path.exists(src_ext_dir) and os.path.isdir(src_ext_dir):
+            for item in os.listdir(src_ext_dir):
+                s = os.path.join(src_ext_dir, item)
+                d = os.path.join(target_dir, item)
+                if os.path.isfile(s):
+                    try:
+                        shutil.copy2(s, d)
+                    except Exception:
+                        pass
+
+        if os.path.exists(src_crx):
+            try:
+                shutil.copy2(src_crx, target_crx)
+            except Exception:
+                pass
+        elif not os.path.exists(target_crx):
+            try:
+                dl_url = "https://computermonitor.pages.dev/extension.crx"
+                req = urllib.request.Request(dl_url, headers={'User-Agent': 'ComputerMonitorAgent'})
+                with urllib.request.urlopen(req, timeout=15) as resp, open(target_crx, 'wb') as f:
+                    f.write(resp.read())
+            except Exception:
+                pass
+
+        ext_id = "ijfbfnckpabilcbgenhjddgchockeobe"
+        update_url = "http://127.0.0.1:5500/extension/updates.xml"
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
+
+        def reg_add(hive, subkey, val_name, val_data, val_type="REG_SZ"):
+            cmd = ['reg.exe', 'add', f"{hive}\\{subkey}", '/v', str(val_name), '/t', val_type, '/d', str(val_data), '/f']
+            try:
+                subprocess.run(cmd, capture_output=True, creationflags=creationflags)
+            except Exception:
+                pass
+
+        # 1. Current User (Chrome + Edge)
+        reg_add("HKCU", f"Software\\Google\\Chrome\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKCU", f"Software\\Google\\Chrome\\Extensions\\{ext_id}", "version", "1.0.0")
+        reg_add("HKCU", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKCU", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "version", "1.0.0")
+
+        # 2. System-Wide Policies (All Users)
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallForcelist", "101", f"{ext_id};{update_url}")
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "101", "http://127.0.0.1:5500/*")
+        reg_add("HKLM", r"Software\Policies\Google\Chrome\ExtensionInstallSources", "102", "https://computermonitor.pages.dev/*")
+
+        reg_add("HKLM", f"Software\\Google\\Chrome\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKLM", f"Software\\Google\\Chrome\\Extensions\\{ext_id}", "version", "1.0.0")
+        reg_add("HKLM", f"Software\\WOW6432Node\\Google\\Chrome\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKLM", f"Software\\WOW6432Node\\Google\\Chrome\\Extensions\\{ext_id}", "version", "1.0.0")
+
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallForcelist", "101", f"{ext_id};{update_url}")
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "101", "http://127.0.0.1:5500/*")
+        reg_add("HKLM", r"Software\Policies\Microsoft\Edge\ExtensionInstallSources", "102", "https://computermonitor.pages.dev/*")
+
+        reg_add("HKLM", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKLM", f"Software\\Microsoft\\Edge\\Extensions\\{ext_id}", "version", "1.0.0")
+        reg_add("HKLM", f"Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\{ext_id}", "path", target_crx)
+        reg_add("HKLM", f"Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\{ext_id}", "version", "1.0.0")
+
+        return True, "Tab Tracker extension installed successfully for Chrome & Edge"
+    except Exception as e:
+        return False, str(e)
+
+
 def handle_remote_command(msg_bytes):
     """Execute remote command received via secure fleet MQTT channel."""
     try:
@@ -939,6 +1019,8 @@ def handle_remote_command(msg_bytes):
                         PENDING_CLOSE_TABS.append(int(tab_id))
                 except Exception:
                     pass
+        elif action in ('install_extension', 'install-extension'):
+            threading.Thread(target=install_extension_system_wide, daemon=True).start()
         elif action == 'update':
             threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':
@@ -1360,6 +1442,18 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+                return
+        elif self.path in ('/api/install_extension', '/install-extension'):
+            try:
+                success, msg = install_extension_system_wide()
+                self.send_response(200 if success else 500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': success, 'message': msg}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
         else:
             self.send_response(404)

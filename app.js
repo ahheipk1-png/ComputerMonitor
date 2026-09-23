@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.8';
-const EXPECTED_AGENT_VERSION = '4.7.8';
+const CURRENT_WEB_VERSION = '4.7.9';
+const EXPECTED_AGENT_VERSION = '4.7.9';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -1837,9 +1837,14 @@ function renderBrowserTabs(node) {
               </div>
             </div>
           </div>
-          <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="border-color: #f43f5e; color: #f43f5e; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer;">
-            🧩 Fix: Install for All Users
-          </button>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="requestInstallExtensionRemote()" style="background: #0284c7; border: none; color: #fff; padding: 6px 14px; font-size: 0.82rem; font-weight: 700; white-space: nowrap; cursor: pointer; border-radius: 6px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4);">
+              ⚡ 1-Click Install on This PC
+            </button>
+            <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="border-color: #f43f5e; color: #f43f5e; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer;">
+              Options & Help
+            </button>
+          </div>
         </div>
       `;
     } else {
@@ -1865,8 +1870,8 @@ function renderBrowserTabs(node) {
         badgeEl.style.background = 'rgba(245, 158, 11, 0.15)';
         badgeEl.style.color = '#f59e0b';
       } else {
-        badgeEl.style.background = 'rgba(56, 189, 248, 0.15)';
-        badgeEl.style.color = 'var(--cyan)';
+        badgeEl.style.background = 'rgba(14, 165, 233, 0.15)';
+        badgeEl.style.color = '#38bdf8';
       }
     } else {
       badgeEl.style.display = 'none';
@@ -1905,11 +1910,16 @@ function renderBrowserTabs(node) {
               ⚠️ Web Monitoring Failed (${failedBrowserText} Running Unmonitored)
             </div>
             <div style="font-size: 0.84rem; color: var(--text-muted); max-width: 520px; margin: 0 auto 16px auto; line-height: 1.5;">
-              ${failedBrowserText} processes are actively executing on this machine, but the Tab Tracker extension is missing, disabled, or blocked. Run the 1-click installer to force-install it across all users.
+              ${failedBrowserText} processes are actively executing on this machine, but the Tab Tracker extension is missing, disabled, or blocked. Use the 1-click remote installer to configure it across all users.
             </div>
-            <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.82rem; padding: 6px 16px; border-color: #f43f5e; color: #f43f5e; font-weight: 600;">
-              🧩 1-Click Install for All Users
-            </button>
+            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-primary" onclick="requestInstallExtensionRemote()" style="font-size: 0.82rem; padding: 6px 16px; background: #0284c7; border: none; font-weight: 700; color: #fff; border-radius: 6px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4); cursor: pointer;">
+                ⚡ 1-Click Install on This PC
+              </button>
+              <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.82rem; padding: 6px 14px; border-color: #f43f5e; color: #f43f5e; font-weight: 600;">
+                Options & Help
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -2004,8 +2014,38 @@ function requestCloseBrowserTab(tabId, tabTitle) {
   }
 }
 
+// 1-Click Remote Installation of Tab Tracker Extension across All Users
+function requestInstallExtensionRemote() {
+  const active = getActiveNode();
+  if (!active || active.status !== 'online') {
+    showToast('Computer is currently offline. Extension cannot be installed remotely.', 'error');
+    return;
+  }
+
+  const compName = getNodeDisplayName(active);
+  if (!confirm(`Install Tab Tracker extension on "${compName}" for all Chrome and Microsoft Edge users?\n\nThis will configure Windows machine policies on the remote machine.`)) {
+    return;
+  }
+
+  const success = sendFleetCommand(active, {
+    action: 'install_extension'
+  });
+
+  if (success) {
+    showToast(`⚡ Extension installation command sent to ${compName}. Restart Chrome/Edge on that PC to activate.`, 'success', 8000);
+    closeExtensionSetupModal();
+  } else {
+    showToast(`Failed to send command. Check MQTT network connection.`, 'error');
+  }
+}
+
 function openExtensionSetupModal() {
   const modal = document.getElementById('extension-modal');
+  const nameSpan = document.getElementById('ext-modal-node-name');
+  const active = getActiveNode();
+  if (nameSpan) {
+    nameSpan.textContent = active ? getNodeDisplayName(active) : 'This Computer';
+  }
   if (modal) modal.classList.add('active');
 }
 

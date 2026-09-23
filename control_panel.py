@@ -25,7 +25,7 @@ EXE_NAME = "ComputerMonitorAgent.exe"
 TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
-APP_VERSION = "4.7.8"
+APP_VERSION = "4.7.9"
 VERSION_CHECK_URL = "https://computermonitor.pages.dev/version.json"
 
 # Base directory where files live (handle PyInstaller frozen mode)
@@ -304,6 +304,10 @@ class App(tk.Tk):
 
         self.btn_uninstall = tk.Button(btn_grid, text="🗑 Remove Startup Task", font=("Segoe UI", 9, "bold"), bg="#475569", fg="#ffffff", activebackground="#334155", activeforeground="#ffffff", relief="flat", padx=10, pady=8, cursor="hand2", command=self.uninstall_task)
         self.btn_uninstall.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=4)
+
+        # Row C: Browser Tab Tracker Extension
+        self.btn_install_ext = tk.Button(btn_grid, text="🧩 Install Tab Tracker Extension (All Users)", font=("Segoe UI", 9, "bold"), bg="#0891b2", fg="#ffffff", activebackground="#0e7490", activeforeground="#ffffff", relief="flat", padx=10, pady=7, cursor="hand2", command=self.install_extension_ui)
+        self.btn_install_ext.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
         btn_grid.columnconfigure(0, weight=1)
         btn_grid.columnconfigure(1, weight=1)
@@ -689,6 +693,115 @@ Start-ScheduledTask -TaskName '{TASK_NAME}'
             run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevated_cmd])
         self.log("Task removed.")
         self.update_ui_status()
+
+    def install_extension_ui(self):
+        """Install and register Tab Tracker extension for Chrome and Edge across Current User & All Users."""
+        self.log("Installing Tab Tracker Extension for Chrome & Edge...")
+
+        target_dir = os.path.join(PROGRAM_DATA_DIR, "extension")
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except Exception:
+            pass
+
+        src_ext_dir = os.path.join(BASE_DIR, 'extension')
+        src_crx = os.path.join(BASE_DIR, 'extension.crx')
+        target_crx = os.path.join(target_dir, 'extension.crx')
+
+        import shutil
+        if os.path.exists(src_ext_dir) and os.path.isdir(src_ext_dir):
+            for item in os.listdir(src_ext_dir):
+                s = os.path.join(src_ext_dir, item)
+                d = os.path.join(target_dir, item)
+                if os.path.isfile(s):
+                    try:
+                        shutil.copy2(s, d)
+                    except Exception:
+                        pass
+        if os.path.exists(src_crx):
+            try:
+                shutil.copy2(src_crx, target_crx)
+            except Exception:
+                pass
+        elif not os.path.exists(target_crx):
+            try:
+                dl_url = "https://computermonitor.pages.dev/extension.crx"
+                req = urllib.request.Request(dl_url, headers={'User-Agent': 'ComputerMonitorControl'})
+                with urllib.request.urlopen(req, timeout=15) as resp, open(target_crx, 'wb') as f:
+                    f.write(resp.read())
+            except Exception as e:
+                self.log(f"Warning downloading extension.crx: {e}")
+
+        # PowerShell commands to register machine policies and user registry
+        ps_script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$targetDir = '{target_dir}'
+$targetCrx = '{target_crx}'
+$extId = 'ijfbfnckpabilcbgenhjddgchockeobe'
+$updateUrl = 'http://127.0.0.1:5500/extension/updates.xml'
+
+# HKCU registration
+reg add "HKCU\\Software\\Google\\Chrome\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKCU\\Software\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+reg add "HKCU\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKCU\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+
+# HKLM Policies (All Users)
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
+reg add "HKLM\\Software\\Google\\Chrome\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKLM\\Software\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+reg add "HKLM\\Software\\WOW6432Node\\Google\\Chrome\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKLM\\Software\\WOW6432Node\\Google\\Chrome\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" /v 101 /t REG_SZ /d "$extId;$updateUrl" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 101 /t REG_SZ /d "http://127.0.0.1:5500/*" /f | Out-Null
+reg add "HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallSources" /v 102 /t REG_SZ /d "https://computermonitor.pages.dev/*" /f | Out-Null
+reg add "HKLM\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKLM\\Software\\Microsoft\\Edge\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "path" /t REG_SZ /d "$targetCrx" /f | Out-Null
+reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "version" /t REG_SZ /d "1.0.0" /f | Out-Null
+"""
+
+        bat_path = os.path.join(BASE_DIR, "install-extension-all-users.bat")
+
+        if is_admin():
+            if os.path.exists(bat_path):
+                run_cmd_hidden(["cmd.exe", "/c", bat_path])
+            else:
+                run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
+            self.log("[SUCCESS] Tab Tracker installed for ALL Chrome & Edge users!")
+            messagebox.showinfo(
+                "Tab Tracker Installed",
+                "✅ Tab Tracker Extension Installed Successfully!\n\n"
+                "• All Users & Profiles: Registered via Windows Machine Policies\n"
+                "• Browsers: Google Chrome & Microsoft Edge\n\n"
+                "Open or restart Chrome/Edge to activate tab tracking."
+            )
+        else:
+            self.log("Requesting Administrator permission via UAC to register policies for all accounts...")
+            temp_ps1 = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'cm_install_ext_policy.ps1')
+            try:
+                with open(temp_ps1, 'w', encoding='utf-8') as f:
+                    f.write(ps_script)
+                elevated_cmd = f"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{temp_ps1}\"' -Verb RunAs -Wait"
+                run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevated_cmd])
+                try:
+                    os.remove(temp_ps1)
+                except Exception:
+                    pass
+                self.log("[SUCCESS] Tab Tracker extension registered!")
+                messagebox.showinfo(
+                    "Tab Tracker Installed",
+                    "✅ Tab Tracker Extension Installed Successfully!\n\n"
+                    "• All Users & Profiles: Registered via Windows Machine Policies\n"
+                    "• Browsers: Google Chrome & Microsoft Edge\n\n"
+                    "Open or restart Chrome/Edge to activate tab tracking."
+                )
+            except Exception as e:
+                self.log(f"Elevation error: {e}")
+                messagebox.showerror("Installation Error", str(e))
 
     def terminate_custom_process(self):
         val = self.ent_kill.get().strip()

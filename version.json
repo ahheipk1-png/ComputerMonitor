@@ -1,7 +1,7 @@
 {
-  "version": "4.7.8",
-  "build_timestamp": 1790180000,
+  "version": "4.7.9",
+  "build_timestamp": 1790200000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Real-time Browser Tab Monitoring & Remote Tab Closing for Chrome & Edge with 1-click all-users enterprise policy setup",
+  "release_notes": "1-Click GUI Buttons (Desktop Control Panel & Web Dashboard) for instant Tab Tracker extension installation across all Chrome & Edge users",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

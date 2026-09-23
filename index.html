@@ -927,26 +927,35 @@
           Enable real-time website tracking and remote tab closing across <strong>all users and browser profiles</strong> on your monitored computers.
         </p>
 
-        <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-          <h4 style="margin: 0 0 6px 0; color: var(--cyan); font-size: 0.95rem;">⚡ Option 1: 1-Click System-Wide Install (Recommended - All Users)</h4>
-          <p style="margin: 0 0 8px 0; font-size: 0.86rem; color: var(--text-muted);">
-            Installs the extension into Windows Machine Policy so Chrome and Edge automatically load it for <strong>every user and profile</strong> on the computer:
-          </p>
-          <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px 12px; font-family: monospace; font-size: 0.84rem; display: flex; justify-content: space-between; align-items: center;">
-            <code style="color: #38bdf8;">install-extension-all-users.bat</code>
+        <div style="background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <h4 style="margin: 0 0 4px 0; color: #38bdf8; font-size: 0.95rem; font-weight: 700;">⚡ Option 1: 1-Click Remote Install (Recommended)</h4>
+              <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted);">
+                Installs machine policies remotely for <strong>all Chrome & Edge users</strong> on the computer without opening the remote desktop.
+              </p>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="requestInstallExtensionRemote()" style="background: #0284c7; border: none; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; cursor: pointer; border-radius: 6px; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.5);">
+              ⚡ Install on <span id="ext-modal-node-name">This Computer</span>
+            </button>
           </div>
-          <p style="margin: 6px 0 0 0; font-size: 0.8rem; color: var(--text-muted);">
-            Right-click <code>install-extension-all-users.bat</code> inside your ComputerMonitor folder and select <em>"Run as administrator"</em>.
-          </p>
         </div>
 
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
-          <h4 style="margin: 0 0 6px 0; font-size: 0.95rem;">🛠️ Option 2: Manual Browser Setup (Single Profile)</h4>
-          <ol style="margin: 0; padding-left: 20px; font-size: 0.86rem; color: var(--text-muted);">
-            <li>Open <code>chrome://extensions</code> or <code>edge://extensions</code></li>
-            <li>Enable <strong>Developer mode</strong> (toggle in top right)</li>
-            <li>Click <strong>Load unpacked</strong> and select the <code>extension</code> folder inside ComputerMonitor.</li>
-          </ol>
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+          <h4 style="margin: 0 0 4px 0; font-size: 0.92rem;">🖥️ Option 2: Desktop Control Panel GUI</h4>
+          <p style="margin: 0 0 6px 0; font-size: 0.84rem; color: var(--text-muted);">
+            On the target computer, open <strong>ComputerMonitorControl.exe</strong> and click:
+          </p>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 6px 12px; font-size: 0.84rem; color: #38bdf8; font-weight: 600; display: inline-block;">
+            🧩 Install Tab Tracker Extension (All Users)
+          </div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+          <h4 style="margin: 0 0 4px 0; font-size: 0.92rem;">🛠️ Option 3: Command Script</h4>
+          <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted);">
+            Right-click <code>install-extension-all-users.bat</code> inside the ComputerMonitor directory and choose <em>"Run as administrator"</em>.
+          </p>
         </div>
 
         <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84rem; color: var(--emerald);">
@@ -963,6 +972,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.7.8"></script>
+  <script src="app.js?v=4.7.9"></script>
 </body>
 </html>
