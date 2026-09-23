@@ -78,12 +78,19 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.7"
+AGENT_VERSION = "4.7.8"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
 LOCK_DEADLINE = 0
 LOCK_LOCK = threading.Lock()
+
+# Browser Tabs Tracking & Remote Tab Closing
+BROWSER_TABS_LOCK = threading.Lock()
+LATEST_BROWSER_TABS = []
+LATEST_BROWSER_NAME = ""
+BROWSER_TABS_UPDATED_AT = 0
+PENDING_CLOSE_TABS = []
 
 # Critical Windows Kernel processes protected from accidental termination (BSOD prevention)
 PROTECTED_PROCESSES = {
@@ -99,6 +106,8 @@ LATEST_METRICS = {
     'os': f"{platform.system()} {platform.release()}",
     'arch': platform.machine(),
     'is_locked': False,
+    'browser_tabs': [],
+    'browser_name': '',
     'cpu': 0,
     'cpu_freq': '-- GHz',
     'cpu_count': os.cpu_count() or 4,
@@ -308,6 +317,96 @@ def is_workstation_locked():
     return False
 
 
+def get_recent_browser_history_fallback():
+    """Fallback reader for Chrome/Edge recent history SQLite database if extension is not connected."""
+    if sys.platform != 'win32':
+        return []
+    try:
+        import sqlite3
+        import tempfile
+        import shutil
+        import urllib.parse
+
+        user_dirs = []
+        user_profile = os.environ.get('USERPROFILE')
+        if user_profile:
+            user_dirs.append(user_profile)
+
+        # When running as SYSTEM service, inspect user profiles on C:\Users
+        if os.path.isdir(r'C:\Users'):
+            for entry in os.listdir(r'C:\Users'):
+                p = os.path.join(r'C:\Users', entry)
+                if os.path.isdir(p) and entry.lower() not in ('default', 'default user', 'public', 'all users'):
+                    if p not in user_dirs:
+                        user_dirs.append(p)
+
+        candidates = []
+        for u in user_dirs:
+            ch = os.path.join(u, r'AppData\Local\Google\Chrome\User Data\Default\History')
+            if os.path.isfile(ch):
+                candidates.append((ch, 'Chrome'))
+            ed = os.path.join(u, r'AppData\Local\Microsoft\Edge\User Data\Default\History')
+            if os.path.isfile(ed):
+                candidates.append((ed, 'Edge'))
+
+        if not candidates:
+            return []
+
+        # Most recently updated history file
+        candidates.sort(key=lambda x: os.path.getmtime(x[0]), reverse=True)
+        hist_path, bname = candidates[0]
+
+        # Only use if modified in the last 12 hours
+        if time.time() - os.path.getmtime(hist_path) > 43200:
+            return []
+
+        tmp_db = os.path.join(tempfile.gettempdir(), f"cm_hist_{os.getpid()}_{int(time.time())}.db")
+        shutil.copy2(hist_path, tmp_db)
+
+        results = []
+        conn = sqlite3.connect(tmp_db, timeout=2.0)
+        cur = conn.cursor()
+        cur.execute("SELECT title, url FROM urls ORDER BY last_visit_time DESC LIMIT 8")
+        seen_domains = set()
+        for row in cur.fetchall():
+            title = (row[0] or 'Untitled').strip()
+            url = (row[1] or '').strip()
+            if not url or url.startswith('chrome://') or url.startswith('edge://'):
+                continue
+            domain = ''
+            try:
+                domain = urllib.parse.urlparse(url).netloc
+            except Exception:
+                pass
+            if not domain:
+                continue
+            # Deduplicate multiple hits to same domain in fallback summary
+            if domain in seen_domains:
+                continue
+            seen_domains.add(domain)
+
+            results.append({
+                'id': 0,
+                'title': title,
+                'url': url,
+                'domain': domain,
+                'active': False,
+                'is_history': True,
+                'browser': bname
+            })
+            if len(results) >= 5:
+                break
+
+        conn.close()
+        try:
+            os.remove(tmp_db)
+        except Exception:
+            pass
+        return results
+    except Exception:
+        return []
+
+
 def background_metrics_collector():
     """Runs in background thread with minimal CPU footprint (<0.2%)."""
     global LATEST_METRICS
@@ -456,6 +555,21 @@ def background_metrics_collector():
                     rem_lock = max(0, int(LOCK_DEADLINE - time.time()))
                     if rem_lock > 0:
                         m['pending_lock_sec'] = rem_lock
+
+            # Browser Tabs & Active Websites
+            with BROWSER_TABS_LOCK:
+                if LATEST_BROWSER_TABS and (time.time() - BROWSER_TABS_UPDATED_AT < 45):
+                    m['browser_tabs'] = list(LATEST_BROWSER_TABS)
+                    m['browser_name'] = LATEST_BROWSER_NAME
+                else:
+                    if cycle % 10 == 0:
+                        cached_fallback_tabs = get_recent_browser_history_fallback()
+                    if 'cached_fallback_tabs' in locals() and cached_fallback_tabs:
+                        m['browser_tabs'] = cached_fallback_tabs
+                        m['browser_name'] = 'Recent History'
+                    else:
+                        m['browser_tabs'] = []
+                        m['browser_name'] = ''
 
             with METRICS_LOCK:
                 LATEST_METRICS = m
@@ -796,6 +910,14 @@ def handle_remote_command(msg_bytes):
             schedule_delayed_lock(lock_delay_sec)
         elif action in ('cancel_lock', 'cancel-lock'):
             cancel_delayed_lock()
+        elif action in ('close_tab', 'close-tab'):
+            tab_id = data.get('tab_id') or data.get('id')
+            if tab_id is not None:
+                try:
+                    with BROWSER_TABS_LOCK:
+                        PENDING_CLOSE_TABS.append(int(tab_id))
+                except Exception:
+                    pass
         elif action == 'update':
             threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':
@@ -1194,6 +1316,30 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
+        elif self.path == '/api/browser_tabs':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                data = json.loads(body) if body else {}
+                tabs = data.get('tabs', [])
+                bname = data.get('browser', 'Chrome')
+                global LATEST_BROWSER_TABS, LATEST_BROWSER_NAME, BROWSER_TABS_UPDATED_AT, PENDING_CLOSE_TABS
+                with BROWSER_TABS_LOCK:
+                    LATEST_BROWSER_TABS = tabs
+                    LATEST_BROWSER_NAME = bname
+                    BROWSER_TABS_UPDATED_AT = time.time()
+                    to_close = list(PENDING_CLOSE_TABS)
+                    PENDING_CLOSE_TABS.clear()
+
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'ok', 'close_tabs': to_close}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+                return
         else:
             self.send_response(404)
             self.end_headers()
@@ -1206,6 +1352,14 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'version': AGENT_VERSION, 'status': 'ok'}).encode('utf-8'))
+            return
+
+        if self.path == '/api/browser_tabs':
+            with BROWSER_TABS_LOCK:
+                payload = json.dumps({'tabs': LATEST_BROWSER_TABS, 'browser': LATEST_BROWSER_NAME}).encode('utf-8')
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(payload)
             return
 
         if self.path == '/metrics':
@@ -1246,6 +1400,12 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
         elif clean_path == '/ComputerMonitor.zip':
             fname = 'ComputerMonitor.zip'
             ctype = 'application/zip'
+        elif clean_path in ('/extension/updates.xml', '/updates.xml'):
+            fname = os.path.join('extension', 'updates.xml')
+            ctype = 'application/xml; charset=utf-8'
+        elif clean_path in ('/extension/extension.crx', '/extension.crx'):
+            fname = 'extension.crx'
+            ctype = 'application/x-chrome-extension'
         else:
             self.send_response(404)
             self.end_headers()
@@ -1253,6 +1413,8 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             return
 
         file_path = os.path.join(BASE_DIR, fname)
+        if not os.path.exists(file_path):
+            file_path = os.path.join(PROGRAM_DATA_DIR, fname)
         if os.path.exists(file_path):
             try:
                 with open(file_path, 'rb') as f:

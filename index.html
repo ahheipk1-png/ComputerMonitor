@@ -538,6 +538,43 @@
           </div>
         </section>
 
+        <!-- Active Browser Tabs Card (Full Width) -->
+        <section class="card browser-tabs-card" id="browser-tabs-card">
+          <div class="card-header">
+            <div class="card-title">
+              <span style="font-size: 1.15rem; line-height: 1;">🌐</span>
+              <h2>Active Browser Tabs (<span id="browser-node-tag">Desktop-Rig</span>)</h2>
+              <span class="badge" id="browser-name-badge" style="display:none; font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: var(--cyan); font-weight: 600;">Chrome</span>
+            </div>
+            <div class="table-actions">
+              <span class="process-counter" id="browser-tabs-count">0 tabs open</span>
+              <button class="btn btn-outline" id="btn-browser-ext-help" title="Install Tab Tracker extension for all users" style="padding: 4px 10px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🧩 Extension Setup (All Users)</span>
+              </button>
+            </div>
+          </div>
+          <div class="table-container" style="max-height: 340px; overflow-y: auto;">
+            <table class="data-table" id="browser-tabs-table">
+              <thead>
+                <tr>
+                  <th style="width: 36px; text-align: center;">#</th>
+                  <th>Website Title & Domain</th>
+                  <th>Exact URL</th>
+                  <th style="width: 110px; text-align: center;">State</th>
+                  <th style="width: 110px; text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="browser-tabs-tbody">
+                <tr>
+                  <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                    Waiting for browser tab telemetry...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- Top Processes Table Card (Full Width) -->
         <section class="card processes-card">
           <div class="card-header">
@@ -877,10 +914,54 @@
     </div>
   </div>
 
+  <!-- Extension Setup Modal -->
+  <div class="modal-overlay" id="extension-modal">
+    <div class="modal-content" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>🧩 Chrome & Edge Tab Tracker Setup</h3>
+        <button class="modal-close" id="extension-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" style="font-size: 0.92rem; line-height: 1.6; color: var(--text-main);">
+        <p style="margin-bottom: 12px;">
+          Enable real-time website tracking and remote tab closing across <strong>all users and browser profiles</strong> on your monitored computers.
+        </p>
+
+        <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: var(--cyan); font-size: 0.95rem;">⚡ Option 1: 1-Click System-Wide Install (Recommended - All Users)</h4>
+          <p style="margin: 0 0 8px 0; font-size: 0.86rem; color: var(--text-muted);">
+            Installs the extension into Windows Machine Policy so Chrome and Edge automatically load it for <strong>every user and profile</strong> on the computer:
+          </p>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px 12px; font-family: monospace; font-size: 0.84rem; display: flex; justify-content: space-between; align-items: center;">
+            <code style="color: #38bdf8;">install-extension-all-users.bat</code>
+          </div>
+          <p style="margin: 6px 0 0 0; font-size: 0.8rem; color: var(--text-muted);">
+            Right-click <code>install-extension-all-users.bat</code> inside your ComputerMonitor folder and select <em>"Run as administrator"</em>.
+          </p>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+          <h4 style="margin: 0 0 6px 0; font-size: 0.95rem;">🛠️ Option 2: Manual Browser Setup (Single Profile)</h4>
+          <ol style="margin: 0; padding-left: 20px; font-size: 0.86rem; color: var(--text-muted);">
+            <li>Open <code>chrome://extensions</code> or <code>edge://extensions</code></li>
+            <li>Enable <strong>Developer mode</strong> (toggle in top right)</li>
+            <li>Click <strong>Load unpacked</strong> and select the <code>extension</code> folder inside ComputerMonitor.</li>
+          </ol>
+        </div>
+
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84rem; color: var(--emerald);">
+          🔒 <strong>100% Local & Private:</strong> The extension reports tab status only to your local ComputerMonitor agent on <code>127.0.0.1:5500</code>. No browsing history is ever sent to external cloud servers.
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 12px 20px; display: flex; justify-content: flex-end;">
+        <button type="button" class="btn-primary" id="btn-close-ext-done">Got It</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.7.7"></script>
+  <script src="app.js?v=4.7.8"></script>
 </body>
 </html>

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "ComputerMonitor Tab Tracker",
+  "version": "1.0.0",
+  "description": "Reports active Chrome/Edge browser tabs to ComputerMonitor and enables remote tab closing.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAshAfwF/wSP07vklzynfBrwyGvd6Tiwzk1olBUTbU2g4z2SgWj7kr2rbZ7iiZGOAzF88K8VAYVo2c9GuQ3hEcZLO6rTG9gaLWDWuI/s8fc55W40GgtoG5DRNU4Wyk6X7Ep9D0t37bj36OgK+R/9jPO13hvBBWn5u+HS1FtmUFq27UjZPF4kgM32z4AEFtHiuIzzYT+lYR9gnkT1GuJ1RjzEV7n5hkQnaiR0mx/JVShxM0ce5sTj0lAL/xzlC88+vZYFBJbfmFMC5xQ1AVDmva2CuBdxxVjhZQR6UiHUJqWRFf7PKELV/dhKMk16BBgGH+0yABTiosBDKHwanWESwpZwIDAQAB",
+  "update_url": "http://127.0.0.1:5500/extension/updates.xml",
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:5500/*",
+    "http://localhost:5500/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

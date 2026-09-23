@@ -1,7 +1,7 @@
 {
-  "version": "4.7.7",
-  "build_timestamp": 1790100000,
+  "version": "4.7.8",
+  "build_timestamp": 1790180000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Real-time Workstation Lock status detection: Online (Active), Online (Locked), Offline across fleet cards and telemetry",
+  "release_notes": "Real-time Browser Tab Monitoring & Remote Tab Closing for Chrome & Edge with 1-click all-users enterprise policy setup",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

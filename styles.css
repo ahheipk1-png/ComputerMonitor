@@ -2753,3 +2753,113 @@ body {
 .lock-shake {
   animation: lockShake 0.4s ease-in-out;
 }
+
+/* Browser Tabs Monitoring & Remote Closing */
+.browser-tabs-card {
+  grid-column: 1 / -1;
+}
+
+.browser-tab-title {
+  font-weight: 600;
+  color: var(--text-main);
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.browser-tab-domain {
+  font-size: 0.75rem;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.browser-tab-url-cell {
+  max-width: 380px;
+}
+
+.browser-tab-url-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 0.78rem;
+  display: inline-block;
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  transition: color 0.15s ease;
+}
+
+.browser-tab-url-link:hover {
+  color: var(--cyan);
+  text-decoration: underline;
+}
+
+.btn-close-tab {
+  background: rgba(225, 29, 72, 0.1);
+  color: #f43f5e;
+  border: 1px solid rgba(225, 29, 72, 0.3);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-close-tab:hover {
+  background: var(--rose);
+  color: #fff;
+  border-color: var(--rose);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.3);
+}
+
+.btn-close-tab:active {
+  transform: translateY(0);
+}
+
+.badge-tab-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-tab-inactive {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.badge-tab-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}

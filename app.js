@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.7';
-const EXPECTED_AGENT_VERSION = '4.7.7';
+const CURRENT_WEB_VERSION = '4.7.8';
+const EXPECTED_AGENT_VERSION = '4.7.8';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -768,6 +768,8 @@ function handleIncomingNodeTelemetry(data) {
   if (data.ip) node.ip = data.ip;
   if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
   if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
+  if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
+  if (data.browser_name !== undefined) node.browserName = data.browser_name;
   if (data.os) {
     node.os = data.os;
     if (data.os.includes('Windows')) node.osIcon = '🪟';
@@ -1775,6 +1777,160 @@ function renderProcesses() {
   });
 }
 
+// Render Active Browser Tabs (Chrome / Edge)
+function renderBrowserTabs(node) {
+  const tableBody = document.getElementById('browser-tabs-tbody');
+  const countEl = document.getElementById('browser-tabs-count');
+  const nodeTag = document.getElementById('browser-node-tag');
+  const badgeEl = document.getElementById('browser-name-badge');
+
+  if (nodeTag) nodeTag.textContent = getNodeDisplayName(node);
+
+  const tabs = (node && Array.isArray(node.browserTabs)) ? node.browserTabs : [];
+  const bname = (node && node.browserName) || '';
+
+  if (badgeEl) {
+    if (bname) {
+      badgeEl.textContent = bname;
+      badgeEl.style.display = 'inline-block';
+      if (bname === 'Edge') {
+        badgeEl.style.background = 'rgba(6, 182, 212, 0.15)';
+        badgeEl.style.color = '#06b6d4';
+      } else if (bname.includes('History')) {
+        badgeEl.style.background = 'rgba(245, 158, 11, 0.15)';
+        badgeEl.style.color = '#f59e0b';
+      } else {
+        badgeEl.style.background = 'rgba(56, 189, 248, 0.15)';
+        badgeEl.style.color = 'var(--cyan)';
+      }
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
+
+  if (countEl) {
+    if (tabs.length === 0) {
+      countEl.textContent = '0 tabs open';
+    } else if (bname.includes('History')) {
+      countEl.textContent = `${tabs.length} recent visited sites`;
+    } else {
+      countEl.textContent = `${tabs.length} tab${tabs.length === 1 ? '' : 's'} open`;
+    }
+  }
+
+  if (!tableBody) return;
+
+  if (node.status !== 'online') {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 28px; color: var(--text-muted);">
+          Computer is currently offline. Browser telemetry unavailable.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  if (tabs.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 32px 20px;">
+          <div style="font-size: 1.05rem; margin-bottom: 6px; color: var(--text-main); font-weight: 500;">No Open Browser Tabs Detected</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 14px auto; line-height: 1.5;">
+            Chrome or Edge is not currently active, or the Tab Tracker extension hasn't been set up yet.
+          </div>
+          <button class="btn btn-outline" onclick="openExtensionSetupModal()" style="font-size: 0.8rem; padding: 5px 14px;">
+            🧩 Extension Setup Guide (All Users)
+          </button>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  tabs.forEach((tab, index) => {
+    const rawTitle = tab.title || 'Untitled Tab';
+    const escapedTitle = rawTitle.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const rawUrl = tab.url || '';
+    const escapedUrl = rawUrl.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const domain = tab.domain || (rawUrl ? rawUrl.split('/')[2] || '' : '');
+
+    let stateBadge = '';
+    if (tab.is_history) {
+      stateBadge = `<span class="badge-tab-history" title="Recent visit detected on disk">🕒 Recent</span>`;
+    } else if (tab.active) {
+      stateBadge = `<span class="badge-tab-active" title="User is currently on this tab">🟢 Active</span>`;
+    } else {
+      stateBadge = `<span class="badge-tab-inactive">Open</span>`;
+    }
+
+    let actionBtn = '';
+    if (tab.is_history || !tab.id) {
+      actionBtn = `<span style="font-size: 0.75rem; color: var(--text-muted);">History</span>`;
+    } else {
+      actionBtn = `
+        <button class="btn-close-tab" onclick="requestCloseBrowserTab(${tab.id}, '${escapedTitle.replace(/'/g, "\\'")}')" title="Close this tab on ${getNodeDisplayName(node)}">
+          ✕ Close
+        </button>
+      `;
+    }
+
+    const favicon = tab.favIconUrl 
+      ? `<img src="${tab.favIconUrl}" alt="" style="width: 14px; height: 14px; border-radius: 2px; vertical-align: middle; margin-right: 4px;" onerror="this.style.display='none'">`
+      : `<span style="margin-right: 4px;">🌐</span>`;
+
+    html += `
+      <tr class="browser-tab-row">
+        <td style="text-align: center; color: var(--text-dim); font-size: 0.78rem;">${index + 1}</td>
+        <td>
+          <span class="browser-tab-title" title="${escapedTitle}">${favicon}${escapedTitle}</span>
+          ${domain ? `<span class="browser-tab-domain">🔗 ${domain}</span>` : ''}
+        </td>
+        <td class="browser-tab-url-cell">
+          ${rawUrl ? `<a href="${escapedUrl}" target="_blank" rel="noopener noreferrer" class="browser-tab-url-link" title="${escapedUrl}">${escapedUrl}</a>` : '<span style="color:var(--text-muted); font-size:0.78rem;">—</span>'}
+        </td>
+        <td style="text-align: center;">${stateBadge}</td>
+        <td style="text-align: right;">${actionBtn}</td>
+      </tr>
+    `;
+  });
+
+  tableBody.innerHTML = html;
+}
+
+function requestCloseBrowserTab(tabId, tabTitle) {
+  const active = getActiveNode();
+  if (!active || active.status !== 'online') {
+    showToast('Cannot close tab: computer is offline.', 'error');
+    return;
+  }
+
+  const confirmMsg = `Close tab "${tabTitle}" on ${getNodeDisplayName(active)}?`;
+  if (!confirm(confirmMsg)) return;
+
+  const success = sendFleetCommand(active, {
+    action: 'close_tab',
+    tab_id: Number(tabId)
+  });
+
+  if (success) {
+    showToast(`Closing tab "${tabTitle}" on ${getNodeDisplayName(active)}...`, 'info');
+  } else {
+    showToast(`Failed to send close command. Check connection.`, 'error');
+  }
+}
+
+function openExtensionSetupModal() {
+  const modal = document.getElementById('extension-modal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeExtensionSetupModal() {
+  const modal = document.getElementById('extension-modal');
+  if (modal) modal.classList.remove('active');
+}
+
 // Update Detailed View with Real Telemetry
 function updateDetailedView() {
   const active = getActiveNode();
@@ -1865,6 +2021,7 @@ function updateDetailedView() {
   }
 
   renderProcesses();
+  renderBrowserTabs(active);
 
   // Charts
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -1914,6 +2071,8 @@ async function pollRealFleet() {
       node.ping = pingMs;
       if (data.task_scheduler) node.taskScheduler = data.task_scheduler;
       if (data.is_locked !== undefined) node.isLocked = Boolean(data.is_locked);
+      if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
+      if (data.browser_name !== undefined) node.browserName = data.browser_name;
 
       if (data.hostname) node.name = data.hostname;
       if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {
@@ -2266,6 +2425,27 @@ function setupEvents() {
   }
   if (btnConfirmRestart) {
     btnConfirmRestart.addEventListener('click', executeRestartComputer);
+  }
+
+  // Extension Setup Modal Listeners
+  const btnBrowserExtHelp = document.getElementById('btn-browser-ext-help');
+  const btnCloseExtModal = document.getElementById('extension-modal-close');
+  const btnDoneExtModal = document.getElementById('btn-close-ext-done');
+  const extModal = document.getElementById('extension-modal');
+
+  if (btnBrowserExtHelp) {
+    btnBrowserExtHelp.addEventListener('click', openExtensionSetupModal);
+  }
+  if (btnCloseExtModal) {
+    btnCloseExtModal.addEventListener('click', closeExtensionSetupModal);
+  }
+  if (btnDoneExtModal) {
+    btnDoneExtModal.addEventListener('click', closeExtensionSetupModal);
+  }
+  if (extModal) {
+    extModal.addEventListener('click', (e) => {
+      if (e.target === extModal) closeExtensionSetupModal();
+    });
   }
 
   // Lock Computer Modal Listeners
