@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.7.9';
-const EXPECTED_AGENT_VERSION = '4.7.9';
+const CURRENT_WEB_VERSION = '4.8.0';
+const EXPECTED_AGENT_VERSION = '4.8.0';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -150,6 +150,9 @@ function sendNodeCommand(node, payload) {
   });
   return sent;
 }
+
+// Global fleet command alias for robust cross-module invocation
+const sendFleetCommand = sendNodeCommand;
 
 // Computer Node Aliases Mapping
 let nodeAliases = {};
@@ -2002,10 +2005,20 @@ function requestCloseBrowserTab(tabId, tabTitle) {
   const confirmMsg = `Close tab "${tabTitle}" on ${getNodeDisplayName(active)}?`;
   if (!confirm(confirmMsg)) return;
 
-  const success = sendFleetCommand(active, {
+  const numTabId = Number(tabId);
+  const success = sendNodeCommand(active, {
     action: 'close_tab',
-    tab_id: Number(tabId)
+    tab_id: numTabId
   });
+
+  // Local fast-path if controlling localhost
+  try {
+    fetch('http://127.0.0.1:5500/api/close_tab', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tab_id: numTabId })
+    }).catch(() => {});
+  } catch (_) {}
 
   if (success) {
     showToast(`Closing tab "${tabTitle}" on ${getNodeDisplayName(active)}...`, 'info');
@@ -2027,7 +2040,7 @@ function requestInstallExtensionRemote() {
     return;
   }
 
-  const success = sendFleetCommand(active, {
+  const success = sendNodeCommand(active, {
     action: 'install_extension'
   });
 

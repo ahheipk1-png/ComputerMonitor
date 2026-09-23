@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.7.9"
+AGENT_VERSION = "4.8.0"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
@@ -1023,8 +1023,9 @@ def handle_remote_command(msg_bytes):
                 try:
                     with BROWSER_TABS_LOCK:
                         PENDING_CLOSE_TABS.append(int(tab_id))
-                except Exception:
-                    pass
+                    logger.info(f"Queued tab {tab_id} for remote closing by browser extension")
+                except Exception as e:
+                    logger.error(f"Failed to queue tab close {tab_id}: {e}")
         elif action in ('install_extension', 'install-extension'):
             threading.Thread(target=install_extension_system_wide, daemon=True).start()
         elif action == 'update':
@@ -1448,6 +1449,30 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+                return
+        elif self.path in ('/api/close_tab', '/close-tab'):
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                data = json.loads(body) if body else {}
+                tab_id = data.get('tab_id') or data.get('id')
+                if tab_id is not None:
+                    with BROWSER_TABS_LOCK:
+                        PENDING_CLOSE_TABS.append(int(tab_id))
+                    logger.info(f"Queued tab {tab_id} via local HTTP API for closing")
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': True, 'tab_id': int(tab_id)}).encode('utf-8'))
+                    return
+                else:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': False, 'error': 'Missing tab_id'}).encode('utf-8'))
+                    return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
         elif self.path in ('/api/install_extension', '/install-extension'):
             try:

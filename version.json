@@ -1,7 +1,7 @@
 {
-  "version": "4.7.9",
-  "build_timestamp": 1790200000,
+  "version": "4.8.0",
+  "build_timestamp": 1790210000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "1-Click GUI Buttons (Desktop Control Panel & Web Dashboard) for instant Tab Tracker extension installation across all Chrome & Edge users",
+  "release_notes": "Fix remote tab close command routing across Web Dashboard, MQTT, and local Agent API",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }

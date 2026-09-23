@@ -79,8 +79,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener(() => scheduleSync(150));
 chrome.tabs.onCreated.addListener(() => scheduleSync(300));
 
-// Regular heartbeat poll every 3 seconds to check for remote close commands
-setInterval(syncTabs, 3000);
+// Regular heartbeat poll every 1.5 seconds to check for remote close commands
+setInterval(syncTabs, 1500);
 
 // Initial sync on startup
 syncTabs();
