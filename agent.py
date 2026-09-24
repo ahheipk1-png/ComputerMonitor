@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.8.0"
+AGENT_VERSION = "4.8.1"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
@@ -252,49 +252,74 @@ if sys.platform == 'win32':
         class WTSINFOEX_LEVEL1_W(ctypes.Structure):
             _fields_ = [
                 ('SessionId', wintypes.ULONG),
-                ('SessionState', wintypes.DWORD),
-                ('SessionFlags', wintypes.DWORD),
+                ('SessionState', ctypes.c_int),
+                ('SessionFlags', wintypes.LONG),
                 ('WinStationName', wintypes.WCHAR * 33),
-                ('UserName', wintypes.WCHAR * 21),
+                ('UserName', wintypes.WCHAR * 257),
                 ('DomainName', wintypes.WCHAR * 18),
+                ('LargeIcon', ctypes.c_void_p),
+                ('MediumIcon', ctypes.c_void_p),
+                ('SmallIcon', ctypes.c_void_p),
+                ('Flags', wintypes.ULONG),
                 ('LogonTime', wintypes.LARGE_INTEGER),
                 ('ConnectTime', wintypes.LARGE_INTEGER),
                 ('DisconnectTime', wintypes.LARGE_INTEGER),
                 ('LastInputTime', wintypes.LARGE_INTEGER),
+                ('LogonTime2', wintypes.LARGE_INTEGER),
                 ('CurrentTime', wintypes.LARGE_INTEGER),
-                ('IncomingBytes', wintypes.DWORD),
-                ('OutgoingBytes', wintypes.DWORD),
-                ('IncomingFrames', wintypes.DWORD),
-                ('OutgoingFrames', wintypes.DWORD),
-                ('IncomingCompressionRatio', wintypes.DWORD),
-                ('OutgoingCompressionRatio', wintypes.DWORD),
             ]
+
+        class WTSINFOEX_UNION(ctypes.Union):
+            _fields_ = [('WTSInfoExLevel1', WTSINFOEX_LEVEL1_W)]
 
         class WTSINFOEXW(ctypes.Structure):
             _fields_ = [
                 ('Level', wintypes.DWORD),
-                ('Data', WTSINFOEX_LEVEL1_W)
+                ('Data', WTSINFOEX_UNION)
+            ]
+
+        class STARTUPINFOW(ctypes.Structure):
+            _fields_ = [
+                ('cb', wintypes.DWORD),
+                ('lpReserved', wintypes.LPWSTR),
+                ('lpDesktop', wintypes.LPWSTR),
+                ('lpTitle', wintypes.LPWSTR),
+                ('dwX', wintypes.DWORD),
+                ('dwY', wintypes.DWORD),
+                ('dwXSize', wintypes.DWORD),
+                ('dwYSize', wintypes.DWORD),
+                ('dwXCountChars', wintypes.DWORD),
+                ('dwYCountChars', wintypes.DWORD),
+                ('dwFillAttribute', wintypes.DWORD),
+                ('dwFlags', wintypes.DWORD),
+                ('wShowWindow', wintypes.WORD),
+                ('cbReserved2', wintypes.WORD),
+                ('lpReserved2', ctypes.c_void_p),
+                ('hStdInput', wintypes.HANDLE),
+                ('hStdOutput', wintypes.HANDLE),
+                ('hStdError', wintypes.HANDLE),
+            ]
+
+        class PROCESS_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ('hProcess', wintypes.HANDLE),
+                ('hThread', wintypes.HANDLE),
+                ('dwProcessId', wintypes.DWORD),
+                ('dwThreadId', wintypes.DWORD),
             ]
     except Exception:
         pass
 
 
 def is_workstation_locked():
-    """Real-time detection of Windows lock screen / login screen state."""
+    """Real-time detection of Windows lock screen / login screen state.
+    Queries Windows Terminal Services SessionFlags (0=Lock, 1=Unlock) and OpenInputDesktop.
+    Never relies on suspended background processes like LogonUI.exe.
+    """
     if sys.platform != 'win32':
         return False
 
-    # Check 1: LogonUI.exe running (Windows lock screen user interface)
-    try:
-        if HAS_PSUTIL:
-            for p in psutil.process_iter(['name']):
-                pname = p.info.get('name')
-                if pname and pname.lower() == 'logonui.exe':
-                    return True
-    except Exception:
-        pass
-
-    # Check 2: Terminal Services API SessionFlags
+    # Check 1: Official Windows Terminal Services API (100% accurate for active console session)
     try:
         kernel32 = ctypes.windll.kernel32
         wtsapi32 = ctypes.windll.wtsapi32
@@ -307,10 +332,27 @@ def is_workstation_locked():
                 try:
                     info = ctypes.cast(ppBuffer, ctypes.POINTER(WTSINFOEXW)).contents
                     if info.Level == 1:
+                        flags = info.Data.WTSInfoExLevel1.SessionFlags
                         # 0 = WTS_SESSIONSTATE_LOCK, 1 = WTS_SESSIONSTATE_UNLOCK
-                        return info.Data.SessionFlags == 0
+                        if flags == 0:
+                            return True
+                        elif flags == 1:
+                            return False
                 finally:
                     wtsapi32.WTSFreeMemory(ppBuffer)
+    except Exception:
+        pass
+
+    # Check 2: Desktop Switch / OpenInputDesktop check
+    try:
+        user32 = ctypes.windll.user32
+        hdesk = user32.OpenInputDesktop(0, False, 0x0100)  # DESKTOP_SWITCHDESKTOP
+        if hdesk:
+            user32.CloseDesktop(hdesk)
+            return False
+        else:
+            if ctypes.GetLastError() == 5:  # ERROR_ACCESS_DENIED (Secure desktop / Lock screen active)
+                return True
     except Exception:
         pass
 
@@ -761,26 +803,52 @@ def execute_system_lock():
     if platform.system() == 'Windows':
         creationflags = 0x08000000 if sys.platform == 'win32' else 0
         import ctypes
-        # 1. Standard Win32 API
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        wtsapi32 = ctypes.windll.wtsapi32
+        user32 = ctypes.windll.user32
+        advapi32 = ctypes.windll.advapi32
+
+        # 1. Standard Win32 API (works when running in interactive user session)
         try:
-            ctypes.windll.user32.LockWorkStation()
+            user32.LockWorkStation()
         except Exception:
             pass
-        # 2. Terminal Services session disconnect (works from Session 0 / SYSTEM service)
+
+        # 2. Session 0 (SYSTEM service) execution into active interactive session
         try:
-            session_id = ctypes.windll.kernel32.WTSGetActiveConsoleSessionId()
+            session_id = kernel32.WTSGetActiveConsoleSessionId()
             if session_id != 0xFFFFFFFF and session_id != 0:
-                ctypes.windll.wtsapi32.WTSDisconnectSession(0, session_id, False)
+                # 2a. Query active user token and spawn LockWorkStation inside Session 1+
+                h_token = wintypes.HANDLE()
+                if wtsapi32.WTSQueryUserToken(session_id, ctypes.byref(h_token)):
+                    try:
+                        si = STARTUPINFOW()
+                        si.cb = ctypes.sizeof(STARTUPINFOW)
+                        si.lpDesktop = "winsta0\\default"
+                        pi = PROCESS_INFORMATION()
+                        cmd = r'C:\Windows\System32\rundll32.exe user32.dll,LockWorkStation'
+                        if advapi32.CreateProcessAsUserW(
+                            h_token, None, cmd, None, None, False,
+                            0x08000000, None, None, ctypes.byref(si), ctypes.byref(pi)
+                        ):
+                            kernel32.CloseHandle(pi.hProcess)
+                            kernel32.CloseHandle(pi.hThread)
+                    finally:
+                        kernel32.CloseHandle(h_token)
+
+                # 2b. Native tsdiscon with explicit session_id (e.g. tsdiscon 1)
+                tsdiscon_path = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'tsdiscon.exe')
+                if os.path.exists(tsdiscon_path):
+                    subprocess.Popen([tsdiscon_path, str(session_id)], creationflags=creationflags)
+
+                # 2c. WTSDisconnectSession as tertiary guarantee
+                wtsapi32.WTSDisconnectSession(0, session_id, False)
         except Exception:
             pass
-        # 3. Native tsdiscon.exe fallback
-        try:
-            tsdiscon_path = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'tsdiscon.exe')
-            if os.path.exists(tsdiscon_path):
-                subprocess.Popen([tsdiscon_path], creationflags=creationflags)
-        except Exception:
-            pass
-        # 4. Rundll32 fallback
+
+        # 3. Rundll32 fallback in current context
         try:
             subprocess.Popen(['rundll32.exe', 'user32.dll,LockWorkStation'], creationflags=creationflags)
         except Exception:

@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.8.0';
-const EXPECTED_AGENT_VERSION = '4.8.0';
+const CURRENT_WEB_VERSION = '4.8.1';
+const EXPECTED_AGENT_VERSION = '4.8.1';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage

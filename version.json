@@ -1,7 +1,7 @@
 {
-  "version": "4.8.0",
-  "build_timestamp": 1790210000,
+  "version": "4.8.1",
+  "build_timestamp": 1790370000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Fix remote tab close command routing across Web Dashboard, MQTT, and local Agent API",
+  "release_notes": "Fix Windows workstation lock execution from Session 0 (SYSTEM service) via CreateProcessAsUser and eliminate false positive lock detection caused by suspended LogonUI.exe",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }
