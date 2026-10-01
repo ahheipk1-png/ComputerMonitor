@@ -931,6 +931,40 @@ function renderFleetBar() {
       : `<span class="node-lock-countdown-pill fleet-lock-badge-${node.id}" style="display:none;"></span>`;
     const statusInfo = getNodeStatusInfo(node);
 
+    const guardBadgeHtml = (() => {
+      if (node.status !== 'online') return '';
+      const guard = node.gameGuard;
+      if (!guard) {
+        return `<span style="font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-weight: 600;" title="Game Guard is not running or agent needs update to v4.9.0">🛡️ OFF</span>`;
+      }
+      if (guard.enabled === false) {
+        return `<span style="font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); font-weight: 600;" title="Game & Auto-Clicker Guard is PAUSED">⏸️ PAUSED</span>`;
+      }
+      if (!guard.task_installed || !guard.task_running) {
+        return `<span style="font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 600;" title="Game Guard is STOPPED / MISSING">⚠️ STOPPED</span>`;
+      }
+      return `<span style="font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600;" title="Game Guard ACTIVE (Blocking Roblox & Auto-Clickers)">🛡️ ON</span>`;
+    })();
+
+    let guardMiniText = '--';
+    let guardMiniClass = 'text-muted';
+    if (node.status === 'online') {
+      const guard = node.gameGuard;
+      if (!guard) {
+        guardMiniText = 'OFF';
+        guardMiniClass = 'text-muted';
+      } else if (guard.enabled === false) {
+        guardMiniText = 'PAUSED';
+        guardMiniClass = 'text-amber';
+      } else if (!guard.task_installed || !guard.task_running) {
+        guardMiniText = 'STOPPED';
+        guardMiniClass = 'text-rose';
+      } else {
+        guardMiniText = 'ACTIVE 🛡️';
+        guardMiniClass = 'text-emerald';
+      }
+    }
+
     card.innerHTML = `
       <div class="node-card-top">
         <div class="node-card-brand" style="min-width: 0; flex: 1;">
@@ -947,7 +981,8 @@ function renderFleetBar() {
             ${hasAlias ? `<span class="node-sub-name" style="font-size: 0.72rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(node.name)}</span>` : ''}
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
+        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">
+          ${guardBadgeHtml}
           ${lockBadgeHtml}
           <span class="node-status-pill ${statusInfo.pillClass}">${statusInfo.pillText}</span>
           ${node.status === 'offline' ? `<button class="btn-remove-node" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 4px; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; cursor: pointer; line-height: 1;">✕</button>` : ''}
@@ -965,6 +1000,10 @@ function renderFleetBar() {
         <div class="node-mini-stat">
           <span class="node-mini-lbl">STATUS</span>
           <span class="node-mini-val ${statusInfo.miniClass}">${statusInfo.miniText}</span>
+        </div>
+        <div class="node-mini-stat">
+          <span class="node-mini-lbl">GUARD</span>
+          <span class="node-mini-val ${guardMiniClass}" title="Game & Auto-Clicker Guard">${guardMiniText}</span>
         </div>
       </div>
     `;
