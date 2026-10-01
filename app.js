@@ -2085,6 +2085,7 @@ function renderGameGuard(node) {
   const guard = node.gameGuard || {};
   const isEnabled = guard.enabled !== false;
   const taskInstalled = Boolean(guard.task_installed);
+  const taskRunning = Boolean(guard.task_running);
   const totalBlocked = guard.total_blocked_count || 0;
   const recents = guard.recent_blocks || [];
 
@@ -2103,10 +2104,15 @@ function renderGameGuard(node) {
       badgeEl.style.color = '#94a3b8';
       badgeEl.style.borderColor = 'rgba(100, 116, 139, 0.3)';
     } else if (!isEnabled) {
-      badgeEl.textContent = '⏸️ PAUSED';
+      badgeEl.textContent = '⏸️ PAUSED (OFF)';
       badgeEl.style.background = 'rgba(245, 158, 11, 0.15)';
       badgeEl.style.color = '#f59e0b';
       badgeEl.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+    } else if (!taskInstalled || !taskRunning) {
+      badgeEl.textContent = !taskInstalled ? '⚠️ TASK MISSING (OFF)' : '⚠️ WATCHDOG STOPPED (OFF)';
+      badgeEl.style.background = 'rgba(239, 68, 68, 0.18)';
+      badgeEl.style.color = '#ef4444';
+      badgeEl.style.borderColor = 'rgba(239, 68, 68, 0.35)';
     } else {
       badgeEl.textContent = '🛡️ ACTIVE (BLOCKING)';
       badgeEl.style.background = 'rgba(16, 185, 129, 0.15)';
@@ -2123,9 +2129,12 @@ function renderGameGuard(node) {
     if (!isOnline) {
       watchdogStatus.className = 'font-mono text-muted';
       watchdogStatus.textContent = '⚪ Unknown (Offline)';
-    } else if (taskInstalled) {
+    } else if (taskInstalled && taskRunning) {
       watchdogStatus.className = 'font-mono text-emerald';
       watchdogStatus.textContent = '🟢 Running (SYSTEM Task)';
+    } else if (taskInstalled && !taskRunning) {
+      watchdogStatus.className = 'font-mono text-rose';
+      watchdogStatus.textContent = '🔴 Stopped / Inactive';
     } else {
       watchdogStatus.className = 'font-mono text-rose';
       watchdogStatus.textContent = '⚠️ Missing / Not Registered';
