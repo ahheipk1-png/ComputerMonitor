@@ -78,7 +78,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-AGENT_VERSION = "4.8.1"
+AGENT_VERSION = "4.9.0"
 
 # Lock Timer State for Delayed Workstation Locking
 CURRENT_LOCK_EVENT = None
@@ -116,7 +116,8 @@ LATEST_METRICS = {
     'ram': {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0},
     'disk': {'total_gb': 0, 'used_gb': 0, 'free_gb': 0, 'percent': 0},
     'net': {'bytes_sent': 0, 'bytes_recv': 0},
-    'processes': []
+    'processes': [],
+    'game_guard': {'enabled': True, 'task_installed': False, 'task_running': False, 'total_blocked_count': 0, 'recent_blocks': []}
 }
 METRICS_LOCK = threading.Lock()
 
@@ -449,6 +450,324 @@ def get_recent_browser_history_fallback():
         return []
 
 
+# ==============================================================================
+# Game & Auto-Clicker Guard Engine (Roblox & Auto-Clicker Process Blocker)
+# ==============================================================================
+GAME_GUARD_CONFIG_PATH = os.path.join(PROGRAM_DATA_DIR, 'game_guard.json')
+GAME_GUARD_SCRIPT_PATH = os.path.join(PROGRAM_DATA_DIR, 'GameGuard.ps1')
+GAME_GUARD_TASK_NAME = "ComputerMonitorGameGuard"
+GAME_GUARD_LOCK = threading.Lock()
+
+DEFAULT_BLOCKED_EXES = [
+    "robloxplayerbeta.exe",
+    "robloxstudiobeta.exe",
+    "robloxplayerlauncher.exe",
+    "robloxstudiolauncherbeta.exe",
+    "robloxcrashhandler.exe",
+    "opautoclicker.exe",
+    "autoclicker.exe",
+    "speedautoclicker.exe",
+    "gsautoclicker.exe",
+    "tgmacro.exe",
+    "fastclicker.exe",
+    "ioautoclicker.exe",
+    "autoclick.exe",
+    "clicker.exe"
+]
+
+DEFAULT_BLOCKED_KEYWORDS = [
+    "roblox",
+    "autoclick",
+    "auto_click",
+    "speedautoclicker",
+    "gsautoclicker",
+    "opautoclicker",
+    "tgmacro",
+    "fastclicker"
+]
+
+def load_game_guard_config():
+    """Load or initialize Game Guard configuration from ProgramData."""
+    default_cfg = {
+        'enabled': True,
+        'blocked_exes': DEFAULT_BLOCKED_EXES,
+        'blocked_keywords': DEFAULT_BLOCKED_KEYWORDS,
+        'total_blocked_count': 0,
+        'recent_blocks': [],
+        'task_installed': False,
+        'task_running': False,
+        'last_sweep_time': 0
+    }
+    if os.path.isfile(GAME_GUARD_CONFIG_PATH):
+        try:
+            with open(GAME_GUARD_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                default_cfg.update(data)
+                return default_cfg
+        except Exception:
+            pass
+    save_game_guard_config(default_cfg)
+    return default_cfg
+
+
+def save_game_guard_config(cfg):
+    """Save Game Guard configuration safely."""
+    try:
+        os.makedirs(PROGRAM_DATA_DIR, exist_ok=True)
+        with open(GAME_GUARD_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
+
+
+def check_game_guard_task_status():
+    """Check if the ComputerMonitorGameGuard scheduled task is installed and running."""
+    if platform.system() != 'Windows':
+        return False, False
+    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+    try:
+        cmd = ['schtasks.exe', '/query', '/tn', GAME_GUARD_TASK_NAME, '/fo', 'CSV', '/nh']
+        res = subprocess.run(cmd, capture_output=True, text=True, creationflags=creationflags)
+        if res.returncode == 0 and GAME_GUARD_TASK_NAME.lower() in res.stdout.lower():
+            is_installed = True
+            is_running = 'running' in res.stdout.lower()
+            return is_installed, is_running
+    except Exception:
+        pass
+    return False, False
+
+
+def setup_game_guard_task():
+    """Write GameGuard.ps1 watchdog and register ComputerMonitorGameGuard task under SYSTEM."""
+    if platform.system() != 'Windows':
+        return False, "Only supported on Windows"
+    try:
+        os.makedirs(PROGRAM_DATA_DIR, exist_ok=True)
+        ps_content = """# ComputerMonitor Game & Auto-Clicker Guard Watchdog
+# Runs 24/7 under NT AUTHORITY\\SYSTEM with highest resilience against tampering.
+$ErrorActionPreference = 'SilentlyContinue'
+
+$blocked_patterns = @(
+    'roblox*',
+    '*autoclick*',
+    '*auto_click*',
+    'tgmacro*',
+    '*fastclicker*',
+    'gsautoclicker*'
+)
+
+while ($true) {
+    foreach ($pat in $blocked_patterns) {
+        Get-Process -Name $pat -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
+    }
+
+    $agent = Get-Process -Name 'ComputerMonitorAgent' -ErrorAction SilentlyContinue
+    if (-not $agent) {
+        $agentExe = "C:\\ProgramData\\ComputerMonitor\\ComputerMonitorAgent.exe"
+        if (Test-Path $agentExe) {
+            Start-Process -FilePath $agentExe -ArgumentList "--background" -WindowStyle Hidden -ErrorAction SilentlyContinue
+        }
+    }
+
+    Start-Sleep -Seconds 2
+}
+"""
+        with open(GAME_GUARD_SCRIPT_PATH, 'w', encoding='utf-8') as f:
+            f.write(ps_content)
+
+        reg_script_path = os.path.join(PROGRAM_DATA_DIR, "RegisterGameGuard.ps1")
+        reg_content = f"""$ErrorActionPreference = 'SilentlyContinue'
+$destDir = '{PROGRAM_DATA_DIR}'
+$guardScript = '{GAME_GUARD_SCRIPT_PATH}'
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$guardScript`"" -WorkingDirectory $destDir
+$trigBoot = New-ScheduledTaskTrigger -AtStartup
+$trigLogon = New-ScheduledTaskTrigger -AtLogOn
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 0) -MultipleInstances IgnoreNew -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
+
+Unregister-ScheduledTask -TaskName '{GAME_GUARD_TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue
+try {{
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName '{GAME_GUARD_TASK_NAME}' -Action $action -Trigger @($trigBoot, $trigLogon) -Principal $principal -Settings $settings -Force -ErrorAction Stop
+}} catch {{
+    try {{
+        $principalUser = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+        Register-ScheduledTask -TaskName '{GAME_GUARD_TASK_NAME}' -Action $action -Trigger $trigLogon -Principal $principalUser -Settings $settings -Force -ErrorAction Stop
+    }} catch {{
+        Register-ScheduledTask -TaskName '{GAME_GUARD_TASK_NAME}' -Action $action -Trigger $trigLogon -Settings $settings -Force -ErrorAction SilentlyContinue
+    }}
+}}
+Start-ScheduledTask -TaskName '{GAME_GUARD_TASK_NAME}' -ErrorAction SilentlyContinue
+"""
+        with open(reg_script_path, 'w', encoding='utf-8') as f:
+            f.write(reg_content)
+
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
+        subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', reg_script_path],
+                       capture_output=True, text=True, creationflags=creationflags)
+
+        is_installed, is_running = check_game_guard_task_status()
+        with GAME_GUARD_LOCK:
+            cfg = load_game_guard_config()
+            cfg['enabled'] = True
+            cfg['task_installed'] = is_installed
+            cfg['task_running'] = is_running
+            save_game_guard_config(cfg)
+
+        scan_and_terminate_blocked_processes()
+        return True, "Game Guard task registered and running successfully"
+    except Exception as e:
+        return False, str(e)
+
+
+def disable_game_guard_task():
+    """Disable Game Guard and stop the background watchdog task."""
+    try:
+        creationflags = 0x08000000 if sys.platform == 'win32' else 0
+        subprocess.run(['schtasks.exe', '/end', '/tn', GAME_GUARD_TASK_NAME],
+                       capture_output=True, creationflags=creationflags)
+        with GAME_GUARD_LOCK:
+            cfg = load_game_guard_config()
+            cfg['enabled'] = False
+            cfg['task_running'] = False
+            save_game_guard_config(cfg)
+        return True, "Game Guard disabled"
+    except Exception as e:
+        return False, str(e)
+
+
+def scan_and_terminate_blocked_processes():
+    """Scan all active processes and terminate any matching Roblox or Auto-Clicker signatures."""
+    if not HAS_PSUTIL:
+        return []
+
+    cfg = load_game_guard_config()
+    if not cfg.get('enabled', True):
+        return []
+
+    blocked_exes = [x.lower() for x in cfg.get('blocked_exes', DEFAULT_BLOCKED_EXES)]
+    blocked_keywords = [x.lower() for x in cfg.get('blocked_keywords', DEFAULT_BLOCKED_KEYWORDS)]
+
+    safe_whitelist = {
+        'computermonitoragent.exe', 'computermonitorcontrol.exe', 'python.exe',
+        'powershell.exe', 'cmd.exe', 'code.exe', 'explorer.exe', 'antigravity.exe'
+    }
+
+    terminated = []
+    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+
+    for p in psutil.process_iter(['pid', 'name', 'exe']):
+        try:
+            pid = p.info['pid']
+            if pid in (0, 4) or pid == os.getpid():
+                continue
+            name = (p.info.get('name') or '').lower()
+            if not name or name in safe_whitelist:
+                continue
+
+            exe_path = (p.info.get('exe') or '').lower()
+
+            is_match = False
+            matched_rule = ""
+
+            if name in blocked_exes:
+                is_match = True
+                matched_rule = name
+            else:
+                for kw in blocked_keywords:
+                    if kw in name:
+                        is_match = True
+                        matched_rule = f"'{kw}' in name"
+                        break
+
+            if not is_match and exe_path:
+                for kw in blocked_keywords:
+                    if kw in exe_path and not any(sw in exe_path for sw in safe_whitelist):
+                        is_match = True
+                        matched_rule = f"'{kw}' in path"
+                        break
+
+            if is_match:
+                try:
+                    proc = psutil.Process(pid)
+                    proc.kill()
+                except Exception:
+                    pass
+                if platform.system() == 'Windows':
+                    try:
+                        subprocess.run(['taskkill.exe', '/f', '/pid', str(pid)],
+                                       capture_output=True, creationflags=creationflags)
+                    except Exception:
+                        pass
+
+                clean_name = p.info.get('name') or name
+                block_entry = {
+                    'name': clean_name,
+                    'pid': pid,
+                    'rule': matched_rule,
+                    'timestamp': int(time.time()),
+                    'time_str': time.strftime('%H:%M:%S')
+                }
+                terminated.append(block_entry)
+                logger.info(f"GameGuard blocked & terminated process {clean_name} (PID {pid}, rule: {matched_rule})")
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    if terminated:
+        with GAME_GUARD_LOCK:
+            cfg = load_game_guard_config()
+            cfg['total_blocked_count'] = cfg.get('total_blocked_count', 0) + len(terminated)
+            recent = cfg.get('recent_blocks', [])
+            cfg['recent_blocks'] = (terminated + recent)[:25]
+            save_game_guard_config(cfg)
+
+    return terminated
+
+
+def game_guard_worker():
+    """Dedicated background loop that executes game & auto-clicker protection and auto-repairs task."""
+    loop_count = 0
+    while True:
+        try:
+            cfg = load_game_guard_config()
+            if cfg.get('enabled', True):
+                scan_and_terminate_blocked_processes()
+                loop_count += 1
+                if loop_count % 30 == 0:
+                    if platform.system() == 'Windows':
+                        installed, running = check_game_guard_task_status()
+                        if not installed:
+                            setup_game_guard_task()
+                        elif not running:
+                            creationflags = 0x08000000 if sys.platform == 'win32' else 0
+                            subprocess.run(['schtasks.exe', '/run', '/tn', GAME_GUARD_TASK_NAME],
+                                           capture_output=True, creationflags=creationflags)
+        except Exception:
+            pass
+        time.sleep(1.0)
+
+
+def get_game_guard_status():
+    """Retrieve live status of Game Guard for telemetry reporting."""
+    with GAME_GUARD_LOCK:
+        cfg = load_game_guard_config()
+
+    is_installed, is_running = False, False
+    if platform.system() == 'Windows':
+        is_installed, is_running = check_game_guard_task_status()
+
+    return {
+        'enabled': bool(cfg.get('enabled', True)),
+        'task_installed': is_installed,
+        'task_running': is_running,
+        'total_blocked_count': int(cfg.get('total_blocked_count', 0)),
+        'recent_blocks': cfg.get('recent_blocks', []),
+        'blocked_targets': ["Roblox (Player & Studio)", "Auto-Clickers (OP, GS, Speed, TGMacro, etc.)"],
+        'last_sweep_time': int(time.time())
+    }
+
+
 def background_metrics_collector():
     """Runs in background thread with minimal CPU footprint (<0.2%)."""
     global LATEST_METRICS
@@ -633,6 +952,8 @@ def background_metrics_collector():
                 'extension_connected': ext_connected,
                 'warning': warning_msg
             }
+
+            m['game_guard'] = get_game_guard_status()
 
             with METRICS_LOCK:
                 LATEST_METRICS = m
@@ -1096,6 +1417,12 @@ def handle_remote_command(msg_bytes):
                     logger.error(f"Failed to queue tab close {tab_id}: {e}")
         elif action in ('install_extension', 'install-extension'):
             threading.Thread(target=install_extension_system_wide, daemon=True).start()
+        elif action in ('enable_game_guard', 'enable-game-guard'):
+            threading.Thread(target=setup_game_guard_task, daemon=True).start()
+        elif action in ('disable_game_guard', 'disable-game-guard'):
+            threading.Thread(target=disable_game_guard_task, daemon=True).start()
+        elif action in ('rebuild_game_guard', 'rebuild-game-guard'):
+            threading.Thread(target=setup_game_guard_task, daemon=True).start()
         elif action == 'update':
             threading.Thread(target=trigger_agent_update, daemon=True).start()
         elif action == 'kill':
@@ -1542,6 +1869,23 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
                 return
+        elif self.path in ('/api/game_guard/enable', '/api/game_guard/disable', '/api/game_guard/rebuild'):
+            try:
+                if self.path.endswith('/enable'):
+                    setup_game_guard_task()
+                elif self.path.endswith('/disable'):
+                    disable_game_guard_task()
+                elif self.path.endswith('/rebuild'):
+                    setup_game_guard_task()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'game_guard': get_game_guard_status()}).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+                return
         elif self.path in ('/api/install_extension', '/install-extension'):
             try:
                 success, msg = install_extension_system_wide()
@@ -1712,6 +2056,10 @@ def main():
     # Start background MQTT cloud fleet streamer
     mqtt_streamer = threading.Thread(target=mqtt_fleet_worker, daemon=True)
     mqtt_streamer.start()
+
+    # Start Game & Auto-Clicker Guard background watchdog thread
+    game_guard_thread = threading.Thread(target=game_guard_worker, daemon=True)
+    game_guard_thread.start()
 
     # Automatically open the web dashboard in browser (unless --background or --no-browser flag is passed)
     if '--background' not in sys.argv and '--no-browser' not in sys.argv:

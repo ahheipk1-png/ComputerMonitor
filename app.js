@@ -35,8 +35,8 @@ const DEFAULT_NODES = [
 ];
 
 // Centralized Version Control & Automatic Cloud Sync
-const CURRENT_WEB_VERSION = '4.8.1';
-const EXPECTED_AGENT_VERSION = '4.8.1';
+const CURRENT_WEB_VERSION = '4.9.0';
+const EXPECTED_AGENT_VERSION = '4.9.0';
 let isReloadingForUpdate = false;
 
 // Auto-clean any stale legacy '4.5.0' stored in user's browser localStorage
@@ -774,6 +774,7 @@ function handleIncomingNodeTelemetry(data) {
   if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
   if (data.browser_name !== undefined) node.browserName = data.browser_name;
   if (data.browser_monitoring !== undefined) node.browserMonitoring = data.browser_monitoring;
+  if (data.game_guard !== undefined) node.gameGuard = data.game_guard;
   if (data.os) {
     node.os = data.os;
     if (data.os.includes('Windows')) node.osIcon = '🪟';
@@ -2067,6 +2068,167 @@ function closeExtensionSetupModal() {
   if (modal) modal.classList.remove('active');
 }
 
+// ---------------------------------------------------------------------------
+// Game & Auto-Clicker Guard (Roblox / Auto-Clicker Watchdog & Rebuild)
+// ---------------------------------------------------------------------------
+function renderGameGuard(node) {
+  const nodeTag = document.getElementById('game-guard-node-tag');
+  const badgeEl = document.getElementById('game-guard-status-badge');
+  const counterEl = document.getElementById('game-guard-counter');
+  const toggleBtnText = document.getElementById('btn-toggle-game-guard-text');
+  const watchdogStatus = document.getElementById('game-guard-watchdog-status');
+  const blocksContainer = document.getElementById('game-guard-blocks-container');
+  const sweepEl = document.getElementById('game-guard-last-sweep');
+
+  if (!node) return;
+  const isOnline = node.status === 'online';
+  const guard = node.gameGuard || {};
+  const isEnabled = guard.enabled !== false;
+  const taskInstalled = Boolean(guard.task_installed);
+  const totalBlocked = guard.total_blocked_count || 0;
+  const recents = guard.recent_blocks || [];
+
+  if (nodeTag) {
+    nodeTag.textContent = getNodeDisplayName(node);
+  }
+
+  if (counterEl) {
+    counterEl.textContent = `${totalBlocked} blocked`;
+  }
+
+  if (badgeEl) {
+    if (!isOnline) {
+      badgeEl.textContent = '⚫ OFFLINE';
+      badgeEl.style.background = 'rgba(100, 116, 139, 0.15)';
+      badgeEl.style.color = '#94a3b8';
+      badgeEl.style.borderColor = 'rgba(100, 116, 139, 0.3)';
+    } else if (!isEnabled) {
+      badgeEl.textContent = '⏸️ PAUSED';
+      badgeEl.style.background = 'rgba(245, 158, 11, 0.15)';
+      badgeEl.style.color = '#f59e0b';
+      badgeEl.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+    } else {
+      badgeEl.textContent = '🛡️ ACTIVE (BLOCKING)';
+      badgeEl.style.background = 'rgba(16, 185, 129, 0.15)';
+      badgeEl.style.color = '#10b981';
+      badgeEl.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+    }
+  }
+
+  if (toggleBtnText) {
+    toggleBtnText.textContent = isEnabled ? '⏸️ Pause Guard' : '▶️ Resume Guard';
+  }
+
+  if (watchdogStatus) {
+    if (!isOnline) {
+      watchdogStatus.className = 'font-mono text-muted';
+      watchdogStatus.textContent = '⚪ Unknown (Offline)';
+    } else if (taskInstalled) {
+      watchdogStatus.className = 'font-mono text-emerald';
+      watchdogStatus.textContent = '🟢 Running (SYSTEM Task)';
+    } else {
+      watchdogStatus.className = 'font-mono text-rose';
+      watchdogStatus.textContent = '⚠️ Missing / Not Registered';
+    }
+  }
+
+  if (sweepEl) {
+    sweepEl.textContent = isOnline ? (isEnabled ? 'Live Protection Active' : 'Protection Paused') : 'Agent Offline';
+  }
+
+  if (blocksContainer) {
+    if (!isOnline) {
+      blocksContainer.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 12px;">Computer is offline.</div>';
+    } else if (recents.length === 0) {
+      blocksContainer.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 12px;">No blocked game or clicker processes detected yet. Guard is standing by.</div>';
+    } else {
+      let bHtml = '<div style="display: flex; flex-direction: column; gap: 6px;">';
+      const reversed = [...recents].reverse();
+      reversed.forEach(item => {
+        bHtml += `
+          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-hover, rgba(255,255,255,0.02)); border: 1px solid var(--border); border-radius: 4px; padding: 6px 10px; font-size: 0.82rem;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #ef4444; font-weight: 700;">🚫 TERMINATED</span>
+              <strong style="color: var(--text-main); font-family: monospace;">${escapeHtml(item.name || 'Unknown')}</strong>
+              <span style="color: var(--text-dim); font-size: 0.75rem;">(PID: ${item.pid || 'N/A'})</span>
+            </div>
+            <div style="color: var(--text-dim); font-size: 0.75rem; font-family: monospace;">
+              ${escapeHtml(item.timestamp || '')}
+            </div>
+          </div>
+        `;
+      });
+      bHtml += '</div>';
+      blocksContainer.innerHTML = bHtml;
+    }
+  }
+}
+
+function requestToggleGameGuardCurrent() {
+  const active = getActiveNode();
+  if (!active || active.status !== 'online') {
+    showToast('Cannot toggle Game Guard: computer is offline.', 'error');
+    return;
+  }
+
+  const guard = active.gameGuard || {};
+  const isCurrentlyEnabled = guard.enabled !== false;
+  const nextAction = isCurrentlyEnabled ? 'disable_game_guard' : 'enable_game_guard';
+  const actionName = isCurrentlyEnabled ? 'Pause' : 'Resume';
+  const compName = getNodeDisplayName(active);
+
+  if (!confirm(`${actionName} Game & Auto-Clicker Guard on "${compName}"?`)) {
+    return;
+  }
+
+  const success = sendNodeCommand(active, { action: nextAction });
+
+  // Fast-path localhost fallback
+  try {
+    fetch(`http://127.0.0.1:5500/api/game_guard/${isCurrentlyEnabled ? 'disable' : 'enable'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(() => {});
+  } catch (_) {}
+
+  if (success) {
+    if (active.gameGuard) active.gameGuard.enabled = !isCurrentlyEnabled;
+    renderGameGuard(active);
+    showToast(`${actionName} command sent to ${compName}.`, 'success');
+  } else {
+    showToast(`Failed to send command. Check connection.`, 'error');
+  }
+}
+
+function requestRebuildGameGuardCurrent() {
+  const active = getActiveNode();
+  if (!active || active.status !== 'online') {
+    showToast('Cannot rebuild Game Guard: computer is offline.', 'error');
+    return;
+  }
+
+  const compName = getNodeDisplayName(active);
+  if (!confirm(`⚡ Rebuild & Protect Game Guard on "${compName}"?\n\nThis will re-deploy C:\\ProgramData\\ComputerMonitor\\GameGuard.ps1 and re-register the SYSTEM-level Scheduled Task "ComputerMonitorGameGuard" so it cannot be cancelled or deleted by standard accounts.`)) {
+    return;
+  }
+
+  const success = sendNodeCommand(active, { action: 'rebuild_game_guard' });
+
+  // Fast-path localhost fallback
+  try {
+    fetch('http://127.0.0.1:5500/api/game_guard/rebuild', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(() => {});
+  } catch (_) {}
+
+  if (success) {
+    showToast(`⚡ Rebuild command sent to ${compName}. Watchdog script and scheduled task will be recreated under SYSTEM account.`, 'success', 8000);
+  } else {
+    showToast(`Failed to send rebuild command. Check connection.`, 'error');
+  }
+}
+
 // Update Detailed View with Real Telemetry
 function updateDetailedView() {
   const active = getActiveNode();
@@ -2158,6 +2320,7 @@ function updateDetailedView() {
 
   renderProcesses();
   renderBrowserTabs(active);
+  renderGameGuard(active);
 
   // Charts
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2210,6 +2373,7 @@ async function pollRealFleet() {
       if (data.browser_tabs !== undefined) node.browserTabs = data.browser_tabs;
       if (data.browser_name !== undefined) node.browserName = data.browser_name;
       if (data.browser_monitoring !== undefined) node.browserMonitoring = data.browser_monitoring;
+      if (data.game_guard !== undefined) node.gameGuard = data.game_guard;
 
       if (data.hostname) node.name = data.hostname;
       if (data.alias && typeof data.alias === 'string' && data.alias.trim()) {

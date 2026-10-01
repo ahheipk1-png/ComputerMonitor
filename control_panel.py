@@ -25,7 +25,7 @@ EXE_NAME = "ComputerMonitorAgent.exe"
 TASK_NAME = "ComputerMonitorAgent"
 DASHBOARD_URL = "https://computermonitor.pages.dev"
 METRICS_URL = "http://127.0.0.1:5500/metrics"
-APP_VERSION = "4.8.1"
+APP_VERSION = "4.9.0"
 VERSION_CHECK_URL = "https://computermonitor.pages.dev/version.json"
 
 # Base directory where files live (handle PyInstaller frozen mode)
@@ -308,6 +308,10 @@ class App(tk.Tk):
         # Row C: Browser Tab Tracker Extension
         self.btn_install_ext = tk.Button(btn_grid, text="🧩 Install Tab Tracker Extension (All Users)", font=("Segoe UI", 9, "bold"), bg="#0891b2", fg="#ffffff", activebackground="#0e7490", activeforeground="#ffffff", relief="flat", padx=10, pady=7, cursor="hand2", command=self.install_extension_ui)
         self.btn_install_ext.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+
+        # Row D: Game & Auto-Clicker Guard (Roblox / AutoClicker blocker)
+        self.btn_game_guard = tk.Button(btn_grid, text="🎮 Setup & Rebuild Game Guard (Roblox / AutoClickers)", font=("Segoe UI", 9, "bold"), bg="#7c2d12", fg="#ffffff", activebackground="#9a3412", activeforeground="#ffffff", relief="flat", padx=10, pady=7, cursor="hand2", command=self.setup_game_guard_ui)
+        self.btn_game_guard.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
         btn_grid.columnconfigure(0, weight=1)
         btn_grid.columnconfigure(1, weight=1)
@@ -809,6 +813,75 @@ reg add "HKLM\\Software\\WOW6432Node\\Microsoft\\Edge\\Extensions\\$extId" /v "v
             except Exception as e:
                 self.log(f"Elevation error: {e}")
                 messagebox.showerror("Installation Error", str(e))
+
+    def setup_game_guard_ui(self):
+        """Register or rebuild the Game & Auto-Clicker Guard watchdog task."""
+        if not messagebox.askyesno(
+            "Game Guard Setup",
+            "🎮 Setup & Rebuild Game & Auto-Clicker Guard?\n\n"
+            "This will configure an anti-tamper background watchdog task (ComputerMonitorGameGuard) under NT AUTHORITY\\SYSTEM.\n\n"
+            "Enforced Rules:\n"
+            "• Immediately stop Roblox (Player & Studio)\n"
+            "• Immediately stop Auto-Clicker software (OPAutoClicker, GS, SpeedClicker, TGMacro, etc.)\n"
+            "• Auto-restart watchdog if cancelled or deleted by standard user accounts\n\n"
+            "Proceed with installation?"
+        ):
+            return
+
+        self.log("Setting up Game & Auto-Clicker Guard...")
+        bat_path = os.path.join(BASE_DIR, "install-game-guard.bat")
+        if os.path.isfile(bat_path):
+            try:
+                run_elevated_bat(bat_path)
+                self.log("[SUCCESS] Game Guard task registered!")
+                messagebox.showinfo("Game Guard Active", "🛡️ Game & Auto-Clicker Guard is now Active!\n\nRoblox and Auto-Clickers are blocked.")
+            except Exception as e:
+                self.log(f"Error running install-game-guard.bat: {e}")
+                messagebox.showerror("Error", str(e))
+        else:
+            try:
+                target_dir = os.path.join(PROGRAM_DATA_DIR)
+                os.makedirs(target_dir, exist_ok=True)
+                ps1_path = os.path.join(target_dir, "GameGuard.ps1")
+                ps_content = """# ComputerMonitor Game & Auto-Clicker Guard Watchdog
+$ErrorActionPreference = 'SilentlyContinue'
+$blocked_patterns = @('roblox*', '*autoclick*', '*auto_click*', 'tgmacro*', '*fastclicker*', 'gsautoclicker*')
+while ($true) {
+    foreach ($pat in $blocked_patterns) {
+        Get-Process -Name $pat -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
+    }
+    $agent = Get-Process -Name 'ComputerMonitorAgent' -ErrorAction SilentlyContinue
+    if (-not $agent) {
+        $agentExe = "C:\\ProgramData\\ComputerMonitor\\ComputerMonitorAgent.exe"
+        if (Test-Path $agentExe) {
+            Start-Process -FilePath $agentExe -ArgumentList "--background" -WindowStyle Hidden -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -Seconds 2
+}
+"""
+                with open(ps1_path, 'w', encoding='utf-8') as f:
+                    f.write(ps_content)
+
+                reg_cmd = f"""
+                $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{ps1_path}"' -WorkingDirectory '{target_dir}';
+                $trigBoot = New-ScheduledTaskTrigger -AtStartup;
+                $trigLogon = New-ScheduledTaskTrigger -AtLogOn;
+                $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\\SYSTEM' -LogonType ServiceAccount -RunLevel Highest;
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 0) -MultipleInstances IgnoreNew -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1);
+                Unregister-ScheduledTask -TaskName 'ComputerMonitorGameGuard' -Confirm:$false -ErrorAction SilentlyContinue;
+                Register-ScheduledTask -TaskName 'ComputerMonitorGameGuard' -Action $action -Trigger @($trigBoot, $trigLogon) -Principal $principal -Settings $settings -Force;
+                Start-ScheduledTask -TaskName 'ComputerMonitorGameGuard' -ErrorAction SilentlyContinue;
+                """
+                elevated_ps = f"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command \"{reg_cmd}\"' -Verb RunAs -Wait"
+                run_cmd_hidden(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevated_ps])
+                self.log("[SUCCESS] Game Guard task registered via PowerShell!")
+                messagebox.showinfo("Game Guard Active", "🛡️ Game & Auto-Clicker Guard is now Active!\n\nRoblox and Auto-Clickers are blocked.")
+            except Exception as e:
+                self.log(f"Error registering task: {e}")
+                messagebox.showerror("Error", str(e))
 
     def terminate_custom_process(self):
         val = self.ent_kill.get().strip()

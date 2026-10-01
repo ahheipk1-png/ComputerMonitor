@@ -538,6 +538,64 @@
           </div>
         </section>
 
+        <!-- Game & Auto-Clicker Guard Card (Full Width) -->
+        <section class="card game-guard-card" id="game-guard-card" style="border-top: 3px solid #f97316;">
+          <div class="card-header">
+            <div class="card-title">
+              <span style="font-size: 1.15rem; line-height: 1;">🎮</span>
+              <h2>Game & Auto-Clicker Guard (<span id="game-guard-node-tag">Desktop-Rig</span>)</h2>
+              <span class="badge" id="game-guard-status-badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">🛡️ ACTIVE (BLOCKING)</span>
+            </div>
+            <div class="table-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <span class="process-counter" id="game-guard-counter" style="color: #f97316; font-weight: 700;">0 blocked</span>
+              <button class="btn btn-outline" id="btn-toggle-game-guard" onclick="requestToggleGameGuardCurrent()" style="padding: 4px 10px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 5px;">
+                <span id="btn-toggle-game-guard-text">⏸️ Pause Guard</span>
+              </button>
+              <button class="btn btn-primary" id="btn-rebuild-game-guard" onclick="requestRebuildGameGuardCurrent()" style="padding: 4px 12px; font-size: 0.8rem; background: #ea580c; border: none; color: #fff; font-weight: 700; border-radius: 6px; box-shadow: 0 2px 6px rgba(234, 88, 12, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                <span>⚡ Rebuild & Protect Task</span>
+              </button>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 14px 16px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 12px;">
+              <div style="background: var(--bg-hover, rgba(255,255,255,0.03)); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 6px;">Target Rule Enforcement</div>
+                <div style="font-size: 0.86rem; color: var(--text-main); font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                  <span>🚫 Roblox (Player, Studio, Launcher)</span>
+                </div>
+                <div style="font-size: 0.86rem; color: var(--text-main); font-weight: 500; display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                  <span>🚫 Auto-Clickers (OPAutoClicker, GS, Speed, TGMacro)</span>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;">
+                  System watchdog: <span id="game-guard-watchdog-status" class="font-mono text-emerald" style="font-weight: 600;">🟢 Running (SYSTEM Task)</span>
+                </div>
+              </div>
+              <div style="background: var(--bg-hover, rgba(255,255,255,0.03)); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 6px;">Anti-Tamper & Remote Rebuild</div>
+                <div style="font-size: 0.84rem; color: var(--text-main); line-height: 1.45;">
+                  Runs as <strong class="text-cyan">NT AUTHORITY\SYSTEM</strong> with maximum privileges. Standard user accounts cannot stop or cancel this watchdog.
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 6px;">
+                  If stopped or cancelled, click <strong class="text-cyan">⚡ Rebuild & Protect Task</strong> to remotely re-deploy the script and scheduled task.
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Blocks Log -->
+            <div style="margin-top: 10px;">
+              <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span>Recent Block Events</span>
+                <span id="game-guard-last-sweep" style="font-size: 0.75rem; color: var(--text-dim);">Live Protection Active</span>
+              </div>
+              <div id="game-guard-blocks-container" style="max-height: 180px; overflow-y: auto; background: var(--bg-surface-2, rgba(0,0,0,0.2)); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;">
+                <div style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 12px;">
+                  No blocked game or clicker processes detected yet. Guard is standing by.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Active Browser Tabs Card (Full Width) -->
         <section class="card browser-tabs-card" id="browser-tabs-card">
           <div class="card-header">
@@ -972,6 +1030,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="mqtt.min.js"></script>
-  <script src="app.js?v=4.8.1"></script>
+  <script src="app.js?v=4.9.0"></script>
 </body>
 </html>

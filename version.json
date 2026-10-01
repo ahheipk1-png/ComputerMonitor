@@ -1,7 +1,7 @@
 {
-  "version": "4.8.1",
-  "build_timestamp": 1790370000,
+  "version": "4.9.0",
+  "build_timestamp": 1790400000,
   "min_supported_agent": "4.0.0",
-  "release_notes": "Fix Windows workstation lock execution from Session 0 (SYSTEM service) via CreateProcessAsUser and eliminate false positive lock detection caused by suspended LogonUI.exe",
+  "release_notes": "Add 24/7 SYSTEM Game & Auto-Clicker Guard (anti-tamper Roblox & auto-clicker watchdog), live block counter, remote pause/resume, and 1-click remote rebuild from web dashboard",
   "download_url": "https://computermonitor.pages.dev/ComputerMonitor.7z"
 }
