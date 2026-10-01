@@ -1005,7 +1005,7 @@ function renderFleetComparisonGrid() {
           <h3>${node.osIcon || '💻'} ${escapeHtml(dispName)}</h3>
           <p>${hasAlias ? `<b>${escapeHtml(node.name)}</b> &bull; ` : ''}${node.os} &bull; ${node.ip}</p>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
           <button class="btn-comp-rename" data-id="${node.id}" title="Rename ${escapeHtml(dispName)}" style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); color: var(--cyan); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; cursor: pointer;">✏️</button>
           ${node.status === 'online' ? (
             node.agentVersion === CURRENT_WEB_VERSION
@@ -1022,6 +1022,22 @@ function renderFleetComparisonGrid() {
               return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(244, 63, 94, 0.15); color: #fb7185; font-weight: 600; border: 1px solid rgba(244, 63, 94, 0.35);" title="${bName} is running without Tab Tracker extension">⚠️ ${bName} Unmonitored</span>`;
             }
             return '';
+          })()}
+          ${(() => {
+            if (node.status !== 'online') return '';
+            const guard = node.gameGuard;
+            if (!guard) {
+              return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(148, 163, 184, 0.15); color: #94a3b8; font-weight: 600; border: 1px solid rgba(148, 163, 184, 0.3);" title="Game Guard is not running or agent needs update to v4.9.0">🛡️ Guard OFF</span>`;
+            }
+            if (guard.enabled === false) {
+              return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.35);" title="Game & Auto-Clicker Guard is PAUSED">⏸️ Guard PAUSED</span>`;
+            }
+            if (!guard.task_installed || !guard.task_running) {
+              const reason = !guard.task_installed ? 'Task Missing' : 'Watchdog Stopped';
+              return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 600; border: 1px solid rgba(239, 68, 68, 0.35);" title="Game Guard ${reason}! Click Drilldown to Rebuild.">⚠️ Guard STOPPED</span>`;
+            }
+            const blkTxt = (guard.total_blocked_count || 0) > 0 ? ` (${guard.total_blocked_count})` : '';
+            return `<span style="font-size: 0.7rem; padding: 2px 7px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.35);" title="Game Guard ACTIVE: Blocking Roblox & Auto-Clickers">🛡️ Guard ON${blkTxt}</span>`;
           })()}
           <span class="node-status-pill ${statusInfo.pillClass}">${statusInfo.pillText}</span>
           ${node.status === 'offline' ? `<button class="btn-comp-remove" data-id="${node.id}" title="Remove offline computer from fleet" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--rose); border-radius: 6px; padding: 2px 7px; font-size: 0.78rem; font-weight: bold; cursor: pointer;">✕</button>` : ''}
@@ -1067,6 +1083,27 @@ function renderFleetComparisonGrid() {
           <span class="stat-label">Active Processes:</span>
           <span class="stat-value font-mono text-cyan">${node.status === 'online' ? node.processes.length : '--'}</span>
         </div>
+        ${(() => {
+          if (node.status !== 'online') return '';
+          const guard = node.gameGuard;
+          let text = '<span style="color: #94a3b8;">Off / Not active</span>';
+          if (guard) {
+            if (guard.enabled === false) {
+              text = '<span style="color: #f59e0b; font-weight: 600;">⏸️ Paused</span>';
+            } else if (!guard.task_installed || !guard.task_running) {
+              text = `<span style="color: #ef4444; font-weight: 600;">⚠️ ${!guard.task_installed ? 'Task Missing' : 'Watchdog Stopped'}</span>`;
+            } else {
+              const blk = guard.total_blocked_count || 0;
+              text = `<span style="color: #10b981; font-weight: 600;">🛡️ Active (${blk} blocked)</span>`;
+            }
+          }
+          return `
+            <div class="stat-row">
+              <span class="stat-label">Game Guard:</span>
+              <span class="stat-value font-mono">${text}</span>
+            </div>
+          `;
+        })()}
       </div>
 
       <div style="display: flex; gap: 8px; margin-top: 14px;">
